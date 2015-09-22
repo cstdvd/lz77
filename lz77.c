@@ -4,23 +4,68 @@ unsigned char buffer[SB_SIZE];
 unsigned char lookahead[LA_SIZE];
 int la_size;    // actual lookahead size
 
-int main()
+int main(int argc, char *argv[])
 {
 	// vars
-	int i, ret;
-	FILE *file;
+    int opt;
+    FILE *file;
+	
+    while ((opt = getopt(argc, argv, "c:d:h")) != -1)
+    {
+        switch(opt)
+        {
+            case 'c':       /* compression mode */
+                if (file != NULL)
+                {
+                    fprintf(stderr, "Multiple input files not allowed.\n");
+                    fclose(file);
+                    exit(EXIT_FAILURE);
+                }
+                else if ((file = fopen(optarg, "rb")) == NULL)
+                {
+                    perror("Opening file");
+                    exit(EXIT_FAILURE);
+                }
+                
+                encode(file);
+                break;
+                
+            case 'd':       /* decompression mode */
+                if (file != NULL)
+                {
+                    fprintf(stderr, "Multiple input files not allowed.\n");
+                    fclose(file);
+                    exit(EXIT_FAILURE);
+                }
+                else if ((file = fopen(optarg, "rb")) == NULL)
+                {
+                    perror("Opening file");
+                    exit(EXIT_FAILURE);
+                }
+                
+                decode(file);
+                break;
+                
+            case 'h':
+                printf("Usage: lz77 <options>\n");
+                printf("  -c <filename> : Encode input file.\n");
+                printf("  -d <filename> : Decode input file.\n");
+                return(EXIT_SUCCESS);
+        }
+    }
+    return 0;
+}
+
+
+void encode(FILE *file)
+{
+    int i, ret, opt;
     unsigned char c;
-	struct token *t = NULL;
+    struct token *t = NULL;
     int sb_index = 0, la_index = 0;
     la_size = LA_SIZE;
-	
-	// open the file
-	file = fopen("./abc.txt", "r");
-	if(file == NULL){
-		printf("Error opening file.\n");
-		exit(1);
-	}
-	
+    
+    
     for(i = 0; i < LA_SIZE; i++){
         ret = fread(&c, 1, 1, file);
         if(feof(file) == 0 && ret != 0)
@@ -60,8 +105,11 @@ int main()
             t = match(sb_index, la_index);
             printf("\n<%d, %d, %c>\n\n",t->off, t->len, t->next);}
 	}
+}
 
-	return 0;
+void decode(FILE *file)
+{
+    
 }
 
 struct token* match(int sb, int la)
