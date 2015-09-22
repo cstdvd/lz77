@@ -8,7 +8,7 @@ int main(int argc, char *argv[])
 {
 	// vars
     int opt;
-    FILE *file;
+    FILE *file, *out;
 	
     while ((opt = getopt(argc, argv, "c:d:h")) != -1)
     {
@@ -27,7 +27,14 @@ int main(int argc, char *argv[])
                     exit(EXIT_FAILURE);
                 }
                 
-                encode(file);
+                if((out = fopen("peter.lz77", "w")) == NULL)
+                {
+                    perror("Creating compressed file");
+                    exit(EXIT_FAILURE);
+                }
+                
+                encode(file, out);
+                fclose(out);
                 break;
                 
             case 'd':       /* decompression mode */
@@ -50,21 +57,21 @@ int main(int argc, char *argv[])
                 printf("Usage: lz77 <options>\n");
                 printf("  -c <filename> : Encode input file.\n");
                 printf("  -d <filename> : Decode input file.\n");
-                return(EXIT_SUCCESS);
+                break;
         }
     }
+                   
     return 0;
 }
 
 
-void encode(FILE *file)
+void encode(FILE *file, FILE *out)
 {
     int i, ret, opt;
     unsigned char c;
     struct token *t = NULL;
     int sb_index = 0, la_index = 0;
     la_size = LA_SIZE;
-    
     
     for(i = 0; i < LA_SIZE; i++){
         ret = fread(&c, 1, 1, file);
@@ -74,11 +81,9 @@ void encode(FILE *file)
             break;
     }
     
-    for(i = 0; i < LA_SIZE; i++)
-        printf("%c ", lookahead[(la_index+i)%LA_SIZE]);
-    
     t = match(sb_index, la_index);
-    printf("\n<%d, %d, %c>\n\n",t->off, t->len, t->next);
+    
+    writecode(t, out);
     
 	while(la_size > 0){
 		
@@ -97,13 +102,11 @@ void encode(FILE *file)
                 la_size--;
             }
         }
-	
-        for(i = 0; i < la_size; i++)
-            printf("%c ", lookahead[(la_index+i)%LA_SIZE]);
         
         if(la_size > 0){
             t = match(sb_index, la_index);
-            printf("\n<%d, %d, %c>\n\n",t->off, t->len, t->next);}
+            writecode(t, out);
+        }
 	}
 }
 
@@ -146,7 +149,20 @@ struct token* match(int sb, int la)
 		sb = (sb + 1) % SB_SIZE;
         c++;
 	}
-	
 	return t;
+}
+
+void writecode(struct token *t, FILE *out) //  off = 12 bits, len = 4 bits, next = 8 bits
+{
+    unsigned char code[3];
+    int i;
+    
+    code[0] = (unsigned char)t->off;
+    code[1] = (unsigned char)((t->off >> 8) & 0x0f);
+    code[1] = code[1] | (unsigned char)((t->len << 4) & 0xf0);
+    code[2] = t->next;
+    
+    for(i = 0; i < 3; i++)
+        putc(code[i], out);
 }
 
