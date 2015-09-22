@@ -18,6 +18,9 @@ int main()
 		printf("Error opening file.\n");
 		exit(1);
 	}
+    
+    for(i = 0; i < SB_SIZE; i++)
+        buffer[i] = ' ';
 	
     for(i = 0; i < LA_SIZE; i++){
         ret = fread(&c, 1, 1, file);
@@ -28,10 +31,11 @@ int main()
     }
     
     t = match(sb_index, la_index);
+    printf("<%d, %d, %c>\n",t->off, t->len, t->next);
     
 	while(feof(file) == 0){
 		
-        for(i = 0; i < t->len; i++){
+        for(i = 0; i < t->len + 1; i++){
             ret = fread(&c, 1, 1, file);
             if(feof(file) == 0){
                 buffer[sb_index] = lookahead[la_index];
