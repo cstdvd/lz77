@@ -5,8 +5,8 @@
 #define SB_SIZE 30
 
 struct token{
-	int off, n;
+	int off, len;
 	char next;
 };
 
-struct token* match(void *sb, void *la);
+struct token* match(int sb, int la);
