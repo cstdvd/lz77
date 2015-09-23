@@ -31,10 +31,13 @@ int main(int argc, char *argv[])
             if((out = fopen(argv[3], "w")) == NULL)
             {
                 perror("Error opening output file");
+                fclose(file);
                 exit(EXIT_FAILURE);
             }
             
             encode(file, out);
+            
+            fclose(file);
             fclose(out);
             break;
             
@@ -45,13 +48,23 @@ int main(int argc, char *argv[])
                 fclose(file);
                 exit(EXIT_FAILURE);
             }
-            else if ((file = fopen(optarg, "rb")) == NULL)
+            else if ((file = fopen(argv[2], "rb")) == NULL)
             {
-                perror("Opening file");
+                perror("Error opening input file");
                 exit(EXIT_FAILURE);
             }
             
-            decode(file);
+            if((out = fopen(argv[3], "w")) == NULL)
+            {
+                perror("Error opening output file");
+                fclose(file);
+                exit(EXIT_FAILURE);
+            }
+            
+            decode(file, out);
+            
+            fclose(file);
+            fclose(out);
             break;
             
         case 'h':
@@ -111,9 +124,34 @@ void encode(FILE *file, FILE *out)
 	}
 }
 
-void decode(FILE *file)
+void decode(FILE *file, FILE *out)
 {
+    struct token *t;
+    int front = 0, back = 0, off;
     
+    while(feof(file) == 0)
+    {
+        t = readcode(file);
+        if(t == NULL)
+            break;
+        
+        while(t->len > 0)
+        {
+            off = (back - t->off >= 0) ? (back - t->off) : (back + SB_SIZE - t->off);
+            buffer[back] = buffer[off];
+            putc(buffer[back], out);
+            if(back == front)
+                front = (front + 1) % SB_SIZE;
+            back = (back + 1) % SB_SIZE;
+            
+            t->len--;
+        }
+        buffer[back] = t->next;
+        putc(buffer[back], out);
+        if(back == front)
+            front = (front + 1) % SB_SIZE;
+        back = (back + 1) % SB_SIZE;
+    }
 }
 
 struct token* match(int sb, int la)
@@ -167,3 +205,25 @@ void writecode(struct token *t, FILE *out) //  off = 12 bits, len = 4 bits, next
         putc(code[i], out);
 }
 
+struct token *readcode(FILE *file)
+{
+    struct token *t;
+    unsigned char code[3];
+    int ret;
+    
+    t = (struct token*)malloc(sizeof(struct token));
+    
+    ret = fread(code, 1, 3, file);
+    if(feof(file) == 1)
+        return NULL;
+    if(ret < 3){
+        perror("Error reading file.");
+        exit(1);
+    }
+    
+    t->off = (((int)code[1] & 0x0000000f) << 8) | (int)code[0];
+    t->len = ((int)code[1] & 0x000000f0) >> 4;
+    t->next = code[2];
+    
+    return t;
+}

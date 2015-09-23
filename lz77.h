@@ -12,7 +12,9 @@ struct token{
 };
 
 void encode(FILE *file, FILE *out);
-void decode(FILE *file);
+void decode(FILE *file, FILE *out);
 
 void writecode(struct token *t, FILE *out);
+struct token *readcode(FILE *file);
+
 struct token* match(int sb, int la);
