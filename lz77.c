@@ -9,57 +9,58 @@ int main(int argc, char *argv[])
 	// vars
     int opt;
     FILE *file, *out;
+    char *filename;
 	
-    while ((opt = getopt(argc, argv, "c:d:h")) != -1)
+    opt = getopt(argc, argv, "c:d:h");
+    
+    switch(opt)
     {
-        switch(opt)
-        {
-            case 'c':       /* compression mode */
-                if (file != NULL)
-                {
-                    fprintf(stderr, "Multiple input files not allowed.\n");
-                    fclose(file);
-                    exit(EXIT_FAILURE);
-                }
-                else if ((file = fopen(optarg, "rb")) == NULL)
-                {
-                    perror("Opening file");
-                    exit(EXIT_FAILURE);
-                }
-                
-                if((out = fopen("peter.lz77", "w")) == NULL)
-                {
-                    perror("Creating compressed file");
-                    exit(EXIT_FAILURE);
-                }
-                
-                encode(file, out);
-                fclose(out);
-                break;
-                
-            case 'd':       /* decompression mode */
-                if (file != NULL)
-                {
-                    fprintf(stderr, "Multiple input files not allowed.\n");
-                    fclose(file);
-                    exit(EXIT_FAILURE);
-                }
-                else if ((file = fopen(optarg, "rb")) == NULL)
-                {
-                    perror("Opening file");
-                    exit(EXIT_FAILURE);
-                }
-                
-                decode(file);
-                break;
-                
-            case 'h':
-                printf("Usage: lz77 <options>\n");
-                printf("  -c <filename> : Encode input file.\n");
-                printf("  -d <filename> : Decode input file.\n");
-                break;
-        }
+        case 'c':       /* compression mode */
+            if (file != NULL)
+            {
+                fprintf(stderr, "Multiple input files not allowed.\n");
+                fclose(file);
+                exit(EXIT_FAILURE);
+            }
+            else if ((file = fopen(argv[2], "rb")) == NULL)
+            {
+                perror("Error opening input file");
+                exit(EXIT_FAILURE);
+            }
+            
+            if((out = fopen(argv[3], "w")) == NULL)
+            {
+                perror("Error opening output file");
+                exit(EXIT_FAILURE);
+            }
+            
+            encode(file, out);
+            fclose(out);
+            break;
+            
+        case 'd':       /* decompression mode */
+            if (file != NULL)
+            {
+                fprintf(stderr, "Multiple input files not allowed.\n");
+                fclose(file);
+                exit(EXIT_FAILURE);
+            }
+            else if ((file = fopen(optarg, "rb")) == NULL)
+            {
+                perror("Opening file");
+                exit(EXIT_FAILURE);
+            }
+            
+            decode(file);
+            break;
+            
+        case 'h':
+            printf("Usage: lz77 <options>\n");
+            printf("  -c <input file> <output file> : Encode input file to output file.\n");
+            printf("  -d <input file> <output file> : Decode input file to output file.\n");
+            break;
     }
+
                    
     return 0;
 }
@@ -67,7 +68,7 @@ int main(int argc, char *argv[])
 
 void encode(FILE *file, FILE *out)
 {
-    int i, ret, opt;
+    int i, ret;
     unsigned char c;
     struct token *t = NULL;
     int sb_index = 0, la_index = 0;
