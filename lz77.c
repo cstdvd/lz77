@@ -156,8 +156,8 @@ void encode(FILE *file, FILE *out)
     
     t = match(searchbuffer, sb_index, lookahead, la_index, la_size);
     //printf("\n<%d, %d, %c>\n", t->off, t->len, t->next);
-
     writecode(t, out);
+    free(t);
     
 	while(la_size > 0){
 		
@@ -182,8 +182,12 @@ void encode(FILE *file, FILE *out)
             //printf("\n<%d, %d, %c>\tla_size %d\n", t->off, t->len, t->next, la_size);
 
             writecode(t, out);
+            free(t);
         }
 	}
+    
+    free(searchbuffer);
+    free(lookahead);
 }
 
 void decode(FILE *file, FILE *out)
@@ -217,6 +221,8 @@ void decode(FILE *file, FILE *out)
             front = (front + 1) % SB_SIZE;
         back = (back + 1) % SB_SIZE;
     }
+    
+    free(buffer);
 }
 
 struct token* match(unsigned char *searchbuffer, int sb, unsigned char *lookahead, int la, int la_size)
