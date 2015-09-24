@@ -1,17 +1,40 @@
-#include "lz77.h"
+#include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
+#include "getopt.h"
 
-unsigned char buffer[SB_SIZE];
-unsigned char lookahead[LA_SIZE];
-int la_size;    // actual lookahead size
+#define LA_SIZE 16
+#define SB_SIZE 4096
+
+struct token{
+    int off, len;
+    char next;
+};
+
+typedef enum
+{
+    ENCODE,
+    DECODE
+} MODES;
+
+void encode(FILE *file, FILE *out);
+void decode(FILE *file, FILE *out);
+
+void writecode(struct token *t, FILE *out);
+struct token *readcode(FILE *file);
+
+struct token* match(unsigned char *searchbuffer, int sb, unsigned char *lookahead, int la, int la_size);
+
+
 
 int main(int argc, char *argv[])
 {
 	// vars
     int opt;
     FILE *file, *out;
-    char *filename;
     MODES mode;
 	
+    // default mode
     mode = ENCODE;
     
     while ((opt = getopt(argc, argv, "cdi:o:h")) != -1)
@@ -22,7 +45,7 @@ int main(int argc, char *argv[])
                 mode = ENCODE;
                 break;
             
-            case 'd':
+            case 'd':       /* decompression mode */
                 mode = DECODE;
                 break;
             
@@ -77,8 +100,6 @@ int main(int argc, char *argv[])
                 printf("  -h : Command line options.\n\n");
                 break;
             
-            default:
-                printf("Wrong arguments or inputs\n");
         }
     }
     
@@ -118,7 +139,13 @@ void encode(FILE *file, FILE *out)
     int i, ret;
     int c;
     struct token *t = NULL;
+    unsigned char *lookahead;
+    unsigned char *searchbuffer;
+    int la_size;    // actual lookahead size
+    
     int sb_index = 0, la_index = 0;
+    searchbuffer = (unsigned char*)malloc(SB_SIZE);
+    lookahead = (unsigned char*)malloc(LA_SIZE);
     
     for(la_size = 0; la_size < LA_SIZE; la_size++){
         if((c = getc(file)) != EOF){
@@ -127,7 +154,7 @@ void encode(FILE *file, FILE *out)
             break;
     }
     
-    t = match(sb_index, la_index);
+    t = match(searchbuffer, sb_index, lookahead, la_index, la_size);
     //printf("\n<%d, %d, %c>\n", t->off, t->len, t->next);
 
     writecode(t, out);
@@ -137,13 +164,13 @@ void encode(FILE *file, FILE *out)
         for(i = 0; i < t->len + 1; i++){
             c = getc(file);
             if(c != EOF){
-                buffer[sb_index] = lookahead[la_index];
+                searchbuffer[sb_index] = lookahead[la_index];
                 lookahead[la_index] = c;
                 sb_index = (sb_index + 1) % SB_SIZE;
                 la_index = (la_index + 1) % LA_SIZE;
             }
             else{ // caso in cui EOF compaia prima del riempimento del lookahead
-                buffer[sb_index] = lookahead[la_index];
+                searchbuffer[sb_index] = lookahead[la_index];
                 sb_index = (sb_index + 1) % SB_SIZE;
                 la_index = (la_index + 1) % LA_SIZE;
                 la_size--;
@@ -151,7 +178,7 @@ void encode(FILE *file, FILE *out)
         }
         
         if(la_size > 0){
-            t = match(sb_index, la_index);
+            t = match(searchbuffer, sb_index, lookahead, la_index, la_size);
             //printf("\n<%d, %d, %c>\tla_size %d\n", t->off, t->len, t->next, la_size);
 
             writecode(t, out);
@@ -163,6 +190,9 @@ void decode(FILE *file, FILE *out)
 {
     struct token *t;
     int front = 0, back = 0, off;
+    unsigned char *buffer;
+    
+    buffer = (unsigned char*)malloc(SB_SIZE);
     
     while(feof(file) == 0)
     {
@@ -189,7 +219,7 @@ void decode(FILE *file, FILE *out)
     }
 }
 
-struct token* match(int sb, int la)
+struct token* match(unsigned char *searchbuffer, int sb, unsigned char *lookahead, int la, int la_size)
 {	
 	struct token *t;
     int i, j, c = 0;
@@ -202,7 +232,7 @@ struct token* match(int sb, int la)
 	
 	while(c < SB_SIZE){
 	   
-		for(i = 0; buffer[(sb+i)%SB_SIZE] == lookahead[(la+i)%LA_SIZE]; i++){
+		for(i = 0; searchbuffer[(sb+i)%SB_SIZE] == lookahead[(la+i)%LA_SIZE]; i++){
             if((i >= la_size-1) || (c+i >= SB_SIZE))
                 break;
 		}
