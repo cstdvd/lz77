@@ -11,6 +11,12 @@ struct token{
 	char next;
 };
 
+typedef enum
+{
+    ENCODE,
+    DECODE
+} MODES;
+
 void encode(FILE *file, FILE *out);
 void decode(FILE *file, FILE *out);
 

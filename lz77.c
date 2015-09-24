@@ -10,61 +10,105 @@ int main(int argc, char *argv[])
     int opt;
     FILE *file, *out;
     char *filename;
+    MODES mode;
 	
-    opt = getopt(argc, argv, "c:d:h");
+    mode = ENCODE;
     
-    switch(opt)
+    while ((opt = getopt(argc, argv, "cdi:o:h")) != -1)
     {
-        case 'c':       /* compression mode */
-            if ((file = fopen(argv[2], "rb")) == NULL)
-            {
-                perror("Error opening input file");
-                exit(EXIT_FAILURE);
-            }
+        switch(opt)
+        {
+            case 'c':       /* compression mode */
+                mode = ENCODE;
+                break;
             
-            if((out = fopen(argv[3], "w")) == NULL)
-            {
-                perror("Error opening output file");
-                fclose(file);
-                exit(EXIT_FAILURE);
-            }
+            case 'd':
+                mode = DECODE;
+                break;
             
-            encode(file, out);
+            case 'i':       /* input file name */
+                if (file != NULL){
+                    fprintf(stderr, "Multiple input files not allowed.\n");
+                    fclose(file);
+                
+                    if (out != NULL){
+                        fclose(out);
+                    }
+                
+                    exit(EXIT_FAILURE);
+                }else if ((file = fopen(optarg, "rb")) == NULL){
+                    perror("Opening inFile");
+                
+                    if (out != NULL){
+                        fclose(out);
+                    }
+                
+                    exit(EXIT_FAILURE);
+                }
+                break;
             
-            fclose(file);
-            fclose(out);
-            break;
+            case 'o':       /* output file name */
+                if (out != NULL){
+                    fprintf(stderr, "Multiple output files not allowed.\n");
+                    fclose(out);
+                
+                    if (file != NULL){
+                        fclose(out);
+                    }
+                
+                    exit(EXIT_FAILURE);
+                }else if ((out = fopen(optarg, "w")) == NULL){
+                    perror("Opening outFile");
+                
+                    if (file != NULL){
+                        fclose(file);
+                    }
+                
+                    exit(EXIT_FAILURE);
+                }
+                break;
             
-        case 'd':       /* decompression mode */
-            if ((file = fopen(argv[2], "rb")) == NULL)
-            {
-                perror("Error opening input file");
-                exit(EXIT_FAILURE);
-            }
+            case 'h':
+                printf("Usage: lz77 <options>\n");
+                printf("  -c : Encode input file to output file.\n");
+                printf("  -d : Decode input file to output file.\n");
+                printf("  -i <filename> : Name of input file.\n");
+                printf("  -o <filename> : Name of output file.\n");
+                printf("  -h : Command line options.\n\n");
+                break;
             
-            if((out = fopen(argv[3], "w")) == NULL)
-            {
-                perror("Error opening output file");
-                fclose(file);
-                exit(EXIT_FAILURE);
-            }
-            
-            decode(file, out);
-            
-            fclose(file);
-            fclose(out);
-            break;
-            
-        case 'h':
-            printf("Usage: lz77 <options>\n");
-            printf("  -c <input file> <output file> : Encode input file to output file.\n");
-            printf("  -d <input file> <output file> : Decode input file to output file.\n");
-            break;
-        default:
-            printf("Wrong arguments or inputs\n");
+            default:
+                printf("Wrong arguments or inputs\n");
+        }
     }
-
-                   
+    
+    if (file == NULL){
+        fprintf(stderr, "Input file must be provided\n");
+        
+        if (out != NULL){
+            fclose(out);
+        }
+        
+        exit (EXIT_FAILURE);
+    }else if (out == NULL)
+    {
+        fprintf(stderr, "Output file must be provided\n");
+        
+        if (file != NULL){
+            fclose(file);
+        }
+        
+        exit (EXIT_FAILURE);
+    }
+    
+    if (mode == ENCODE){
+        encode(file, out);
+    }else{
+        decode(file, out);
+    }
+    
+    fclose(file);
+    fclose(out);
     return 0;
 }
 
