@@ -16,13 +16,7 @@ int main(int argc, char *argv[])
     switch(opt)
     {
         case 'c':       /* compression mode */
-            if (file != NULL)
-            {
-                fprintf(stderr, "Multiple input files not allowed.\n");
-                fclose(file);
-                exit(EXIT_FAILURE);
-            }
-            else if ((file = fopen(argv[2], "rb")) == NULL)
+            if ((file = fopen(argv[2], "rb")) == NULL)
             {
                 perror("Error opening input file");
                 exit(EXIT_FAILURE);
@@ -42,13 +36,7 @@ int main(int argc, char *argv[])
             break;
             
         case 'd':       /* decompression mode */
-            if (file != NULL)
-            {
-                fprintf(stderr, "Multiple input files not allowed.\n");
-                fclose(file);
-                exit(EXIT_FAILURE);
-            }
-            else if ((file = fopen(argv[2], "rb")) == NULL)
+            if ((file = fopen(argv[2], "rb")) == NULL)
             {
                 perror("Error opening input file");
                 exit(EXIT_FAILURE);
@@ -72,6 +60,8 @@ int main(int argc, char *argv[])
             printf("  -c <input file> <output file> : Encode input file to output file.\n");
             printf("  -d <input file> <output file> : Decode input file to output file.\n");
             break;
+        default:
+            printf("Wrong arguments or inputs\n");
     }
 
                    
@@ -169,7 +159,7 @@ struct token* match(int sb, int la)
 	while(c < SB_SIZE){
 	   
 		for(i = 0; buffer[(sb+i)%SB_SIZE] == lookahead[(la+i)%LA_SIZE]; i++){
-            if((i >= la_size) || (c+i >= SB_SIZE))
+            if((i >= la_size-1) || (c+i >= SB_SIZE))
                 break;
 		}
         
@@ -226,5 +216,7 @@ struct token *readcode(FILE *file)
     t->len = ((int)code[1] & 0x000000f0) >> 4;
     t->next = code[2];
     
+    //printf("\n<%d, %d, %c>\n", t->off, t->len, t->next);
+
     return t;
 }
