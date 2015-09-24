@@ -85,11 +85,10 @@ void encode(FILE *file, FILE *out)
     int c;
     struct token *t = NULL;
     int sb_index = 0, la_index = 0;
-    la_size = LA_SIZE;
     
-    for(i = 0; i < LA_SIZE; i++){
+    for(la_size = 0; la_size < LA_SIZE; la_size++){
         if((c = getc(file)) != EOF){
-            lookahead[i] = c;
+            lookahead[la_size] = c;
         }else
             break;
     }
