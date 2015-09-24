@@ -82,28 +82,28 @@ int main(int argc, char *argv[])
 void encode(FILE *file, FILE *out)
 {
     int i, ret;
-    unsigned char c;
+    int c;
     struct token *t = NULL;
     int sb_index = 0, la_index = 0;
     la_size = LA_SIZE;
     
     for(i = 0; i < LA_SIZE; i++){
-        ret = fread(&c, 1, 1, file);
-        if(feof(file) == 0 && ret != 0)
+        if((c = getc(file)) != EOF){
             lookahead[i] = c;
-        else
+        }else
             break;
     }
     
     t = match(sb_index, la_index);
-    
+    //printf("\n<%d, %d, %c>\n", t->off, t->len, t->next);
+
     writecode(t, out);
     
 	while(la_size > 0){
 		
         for(i = 0; i < t->len + 1; i++){
-            ret = fread(&c, 1, 1, file);
-            if(feof(file) == 0){
+            c = getc(file);
+            if(c != EOF){
                 buffer[sb_index] = lookahead[la_index];
                 lookahead[la_index] = c;
                 sb_index = (sb_index + 1) % SB_SIZE;
@@ -119,6 +119,8 @@ void encode(FILE *file, FILE *out)
         
         if(la_size > 0){
             t = match(sb_index, la_index);
+            //printf("\n<%d, %d, %c>\tla_size %d\n", t->off, t->len, t->next, la_size);
+
             writecode(t, out);
         }
 	}
@@ -173,10 +175,10 @@ struct token* match(int sb, int la)
 		}
         
         // nel caso in cui il match continui nel lookahead buffer
-        if((c+i >= SB_SIZE) && (i < la_size)){
+        if((c+i >= SB_SIZE) && (i < la_size-1)){
             for(j = la; lookahead[j%LA_SIZE] == lookahead[(la+i)%LA_SIZE]; i++){
                 j++;
-                if(i >= la_size)
+                if(i >= la_size-1)
                     break;
             }
         }
