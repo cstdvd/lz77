@@ -5,6 +5,8 @@
 
 #define LA_SIZE 16
 #define SB_SIZE 4095
+#define N 4
+#define WINDOW_SIZE (SB_SIZE + LA_SIZE) * N
 
 struct token{
     int off, len;
@@ -143,7 +145,7 @@ void encode(FILE *file, FILE *out)
     int la_size, sb_size = 0;    // actual lookahead size
     
     int sb_index = 0, la_index = 0;
-    window = (unsigned char*)malloc(SB_SIZE+LA_SIZE);
+    window = (unsigned char*)malloc(WINDOW_SIZE);
     
     for(la_size = 0; la_size < LA_SIZE; la_size++){
         if((c = getc(file)) != EOF){
@@ -160,17 +162,17 @@ void encode(FILE *file, FILE *out)
         for(i = 0; i < t->len + 1; i++){
             c = getc(file);
             if(c != EOF){
-                window[(la_index+la_size)%(SB_SIZE+LA_SIZE)] = c;
-                la_index = (la_index + 1) % (SB_SIZE+LA_SIZE);
+                window[(la_index+la_size)%(WINDOW_SIZE)] = c;
+                la_index = (la_index + 1) % (WINDOW_SIZE);
                 if(sb_size == SB_SIZE)
-                    sb_index = (sb_index + 1) % (SB_SIZE+LA_SIZE);
+                    sb_index = (sb_index + 1) % (WINDOW_SIZE);
                 else
                     sb_size++;
             }
             else{ // caso in cui EOF compaia prima del riempimento del lookahead
-                la_index = (la_index + 1) % (SB_SIZE+LA_SIZE);
+                la_index = (la_index + 1) % (WINDOW_SIZE);
                 if(sb_size == SB_SIZE)
-                    sb_index = (sb_index + 1) % (SB_SIZE+LA_SIZE);
+                    sb_index = (sb_index + 1) % (WINDOW_SIZE);
                 else
                     sb_size++;
                 
@@ -195,7 +197,7 @@ void decode(FILE *file, FILE *out)
     int front = 0, back = 0, off;
     unsigned char *buffer;
     
-    buffer = (unsigned char*)malloc(SB_SIZE+LA_SIZE);
+    buffer = (unsigned char*)malloc(WINDOW_SIZE);
     
     while(feof(file) == 0)
     {
@@ -205,20 +207,20 @@ void decode(FILE *file, FILE *out)
         
         while(t->len > 0)
         {
-            off = (back - t->off >= 0) ? (back - t->off) : (back + (SB_SIZE+LA_SIZE) - t->off);
+            off = (back - t->off >= 0) ? (back - t->off) : (back + (WINDOW_SIZE) - t->off);
             buffer[back] = buffer[off];
             putc(buffer[back], out);
             if(back == front)
-                front = (front + 1) % (SB_SIZE+LA_SIZE);
-            back = (back + 1) % (SB_SIZE+LA_SIZE);
+                front = (front + 1) % (WINDOW_SIZE);
+            back = (back + 1) % (WINDOW_SIZE);
             
             t->len--;
         }
         buffer[back] = t->next;
         putc(buffer[back], out);
         if(back == front)
-            front = (front + 1) % (SB_SIZE+LA_SIZE);
-        back = (back + 1) % (SB_SIZE+LA_SIZE);
+            front = (front + 1) % (WINDOW_SIZE);
+        back = (back + 1) % (WINDOW_SIZE);
     }
     
     free(buffer);
@@ -237,14 +239,14 @@ struct token* match(unsigned char *window, int sb, int sb_size, int la, int la_s
 	
 	while(c < sb_size){
 	   
-		for(i = 0; window[(sb+i)%(SB_SIZE+LA_SIZE)] == window[(la+i)%(SB_SIZE+LA_SIZE)]; i++){
+		for(i = 0; window[(sb+i)%(WINDOW_SIZE)] == window[(la+i)%(WINDOW_SIZE)]; i++){
             if((i >= la_size-1) || (c+i >= SB_SIZE))
                 break;
 		}
         
         // nel caso in cui il match continui nel lookahead buffer
         if((c+i >= sb_size) && (i < la_size-1)){
-            for(j = la; window[j%(SB_SIZE+LA_SIZE)] == window[(la+i)%(SB_SIZE+LA_SIZE)]; i++){
+            for(j = la; window[j%(WINDOW_SIZE)] == window[(la+i)%(WINDOW_SIZE)]; i++){
                 j++;
                 if(i >= la_size-1)
                     break;
@@ -253,9 +255,9 @@ struct token* match(unsigned char *window, int sb, int sb_size, int la, int la_s
 		if(i > t->len){
 			t->off = sb_size - c;
 			t->len = i;
-			t->next = window[(la+i)%(SB_SIZE+LA_SIZE)];
+			t->next = window[(la+i)%(WINDOW_SIZE)];
 		}
-		sb = (sb + 1) % (SB_SIZE+LA_SIZE);
+		sb = (sb + 1) % (WINDOW_SIZE);
         c++;
 	}
 	return t;
