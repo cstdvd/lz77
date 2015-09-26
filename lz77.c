@@ -2,11 +2,12 @@
 #include <stdio.h>
 #include <string.h>
 #include "getopt.h"
+#include "tree.h"
 
-#define LA_SIZE 16
+#define LA_SIZE 15
 #define SB_SIZE 4095
 #define N 4
-#define WINDOW_SIZE (SB_SIZE + LA_SIZE) * N
+#define WINDOW_SIZE ((SB_SIZE + LA_SIZE) * N)
 
 struct token{
     int off, len;
@@ -25,8 +26,7 @@ void decode(FILE *file, FILE *out);
 void writecode(struct token *t, FILE *out);
 struct token *readcode(FILE *file);
 
-struct token* match(unsigned char *window, int sb, int sb_size, int la, int la_size);
-
+struct token* match(struct node *tree, unsigned char *window, int la, int la_size);
 
 
 int main(int argc, char *argv[])
@@ -138,10 +138,11 @@ int main(int argc, char *argv[])
 
 void encode(FILE *file, FILE *out)
 {
-    int i, ret;
+    int i, ret, h;
     int c;
+    struct node *tree = NULL;
     struct token *t = NULL;
-    unsigned char *window;
+    unsigned char *window, *seq;
     int la_size, sb_size = 0;    // actual lookahead size
     
     int sb_index = 0, la_index = 0;
@@ -153,7 +154,8 @@ void encode(FILE *file, FILE *out)
         }else
             break;
     }
-    t = match(window, sb_index, sb_size, la_index, la_size);
+    t = match(tree, window, la_index, la_size);
+    //printf("<%d, %d, %c>\n\n", t->off, t->len, t->next);
 
     writecode(t, out);
     
@@ -163,17 +165,31 @@ void encode(FILE *file, FILE *out)
             c = getc(file);
             if(c != EOF){
                 window[(la_index+la_size)%(WINDOW_SIZE)] = c;
+                
+                seq = (unsigned char*)malloc(la_size);
+                memcpy(seq, &(window[la_index]), la_size);
+                insert(&tree, seq, la_index, la_size);
+                free(seq);
                 la_index = (la_index + 1) % (WINDOW_SIZE);
-                if(sb_size == SB_SIZE)
+                
+                if(sb_size == SB_SIZE){
+                    delete(&tree, &(window[sb_index]), la_size);
                     sb_index = (sb_index + 1) % (WINDOW_SIZE);
-                else
+                }else
                     sb_size++;
             }
             else{ // caso in cui EOF compaia prima del riempimento del lookahead
+                seq = (unsigned char*)malloc(la_size);
+                memcpy(seq, &(window[la_index]), la_size);
+                insert(&tree, seq, la_index, la_size);
+                free(seq);
+                
                 la_index = (la_index + 1) % (WINDOW_SIZE);
-                if(sb_size == SB_SIZE)
+                
+                if(sb_size == SB_SIZE){
+                    delete(&tree, &(window[sb_index]), la_size);
                     sb_index = (sb_index + 1) % (WINDOW_SIZE);
-                else
+                }else
                     sb_size++;
                 
                 la_size--;
@@ -181,10 +197,11 @@ void encode(FILE *file, FILE *out)
         }
         
         if(la_size > 0){
-            t = match(window, sb_index, sb_size, la_index, la_size);
+            free(t);
+            t = match(tree, window, la_index, la_size);
+            //printf("<%d, %d, %c>\n\n", t->off, t->len, t->next);
 
             writecode(t, out);
-            free(t);
         }
 	}
     
@@ -226,41 +243,33 @@ void decode(FILE *file, FILE *out)
     free(buffer);
 }
 
-struct token* match(unsigned char *window, int sb, int sb_size, int la, int la_size)
-{	
-	struct token *t;
-    int i, j, c = 0;
-	
-	t = (struct token*)malloc(sizeof(struct token));
-	t->off = 0;
-	t->len = 0;
-	t->next = window[la];
-
-	
-	while(c < sb_size){
-	   
-		for(i = 0; window[(sb+i)%(WINDOW_SIZE)] == window[(la+i)%(WINDOW_SIZE)]; i++){
-            if((i >= la_size-1) || (c+i >= SB_SIZE))
-                break;
-		}
+struct token* match(struct node *tree, unsigned char *window, int la, int la_size)
+{
+    struct token *t;
+    struct node *elem;
+    int i = 0, j, ret;
+    
+    t = (struct token*)malloc(sizeof(struct token));
+    t->off = 0;
+    t->len = 0;
+    t->next = window[la];
+    
+    elem = find(tree, &(window[la]), la_size);
+    if (elem != NULL){
+        /*printf("Trovato: ");
+        for(j = 0; j < la_size; j++)
+            printf("%c", elem->seq[j]);
+        printf("\toff %d\tlen %d\n", elem->off, elem->len);*/
+        for (i = 0; memcmp(&(elem->seq[i]), &(window[(la+i)%WINDOW_SIZE]), 1) == 0 && i < la_size-1; i++){}
         
-        // nel caso in cui il match continui nel lookahead buffer
-        if((c+i >= sb_size) && (i < la_size-1)){
-            for(j = la; window[j%(WINDOW_SIZE)] == window[(la+i)%(WINDOW_SIZE)]; i++){
-                j++;
-                if(i >= la_size-1)
-                    break;
-            }
+        if (i > t->len){
+            t->off = (la > elem->off) ? (la - elem->off) : (la + WINDOW_SIZE - elem->off);
+            t->len = i;
+            t->next = window[(la+i)%(WINDOW_SIZE)];
         }
-		if(i > t->len){
-			t->off = sb_size - c;
-			t->len = i;
-			t->next = window[(la+i)%(WINDOW_SIZE)];
-		}
-		sb = (sb + 1) % (WINDOW_SIZE);
-        c++;
-	}
-	return t;
+    }
+    
+    return t;
 }
 
 void writecode(struct token *t, FILE *out) //  off = 12 bits, len = 4 bits, next = 8 bits
