@@ -8,6 +8,6 @@ typedef struct node{
 
 void insert(struct node **tree, unsigned char *seq, int off, int len);
 struct node *find(struct node *tree, unsigned char *seq, int len);
-void delete(struct node **tree, unsigned char *seq, int len);
+void delete(struct node **tree, unsigned char *seq, int len, int sb, int win_size);
 void printtree(struct node *tree);
 #endif /* tree_h */

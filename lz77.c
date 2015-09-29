@@ -6,7 +6,7 @@
 
 #define LA_SIZE 15
 #define SB_SIZE 4095
-#define N 4
+#define N 2
 #define WINDOW_SIZE ((SB_SIZE + LA_SIZE) * N)
 
 struct token{
@@ -33,7 +33,7 @@ int main(int argc, char *argv[])
 {
 	// vars
     int opt;
-    FILE *file, *out;
+    FILE *file = NULL, *out = NULL;
     MODES mode;
 	
     // default mode
@@ -138,7 +138,7 @@ int main(int argc, char *argv[])
 
 void encode(FILE *file, FILE *out)
 {
-    int i, ret, h;
+    int i, ret, h, count = 0, k;
     int c;
     struct node *tree = NULL;
     struct token *t = NULL;
@@ -155,9 +155,10 @@ void encode(FILE *file, FILE *out)
             break;
     }
     t = match(tree, window, la_index, la_size);
-    //printf("<%d, %d, %c>\n\n", t->off, t->len, t->next);
+    printf("<%d, %d, %c>\n\n", t->off, t->len, t->next);
 
     writecode(t, out);
+    count++;
     
 	while(la_size > 0){
 		
@@ -167,27 +168,29 @@ void encode(FILE *file, FILE *out)
                 window[(la_index+la_size)%(WINDOW_SIZE)] = c;
                 
                 seq = (unsigned char*)malloc(la_size);
-                memcpy(seq, &(window[la_index]), la_size);
+                for(k = 0; k < la_size; k++)
+                    memcpy(seq+k, &(window[(la_index+k)%WINDOW_SIZE]), 1);
                 insert(&tree, seq, la_index, la_size);
                 free(seq);
                 la_index = (la_index + 1) % (WINDOW_SIZE);
                 
                 if(sb_size == SB_SIZE){
-                    delete(&tree, &(window[sb_index]), la_size);
+                    delete(&tree, window, la_size, sb_index, WINDOW_SIZE);
                     sb_index = (sb_index + 1) % (WINDOW_SIZE);
                 }else
                     sb_size++;
             }
             else{ // caso in cui EOF compaia prima del riempimento del lookahead
                 seq = (unsigned char*)malloc(la_size);
-                memcpy(seq, &(window[la_index]), la_size);
+                for(k = 0; k < la_size; k++)
+                    memcpy(seq+k, &(window[(la_index+k)%WINDOW_SIZE]), 1);
                 insert(&tree, seq, la_index, la_size);
                 free(seq);
                 
                 la_index = (la_index + 1) % (WINDOW_SIZE);
                 
                 if(sb_size == SB_SIZE){
-                    delete(&tree, &(window[sb_index]), la_size);
+                    delete(&tree, window, la_size, sb_index, WINDOW_SIZE);
                     sb_index = (sb_index + 1) % (WINDOW_SIZE);
                 }else
                     sb_size++;
@@ -199,12 +202,14 @@ void encode(FILE *file, FILE *out)
         if(la_size > 0){
             free(t);
             t = match(tree, window, la_index, la_size);
-            //printf("<%d, %d, %c>\n\n", t->off, t->len, t->next);
+            printf("<%d, %d, %c>\n\n", t->off, t->len, t->next);
 
             writecode(t, out);
+            count++;
         }
 	}
     
+    printf("numero token: %d\n", count);
     free(window);
 }
 
@@ -254,19 +259,29 @@ struct token* match(struct node *tree, unsigned char *window, int la, int la_siz
     t->len = 0;
     t->next = window[la];
     
-    elem = find(tree, &(window[la]), la_size);
-    if (elem != NULL){
+    //elem = find(tree, &(window[la]), la_size);
+    elem = tree;
+    while (elem != NULL){
         /*printf("Trovato: ");
         for(j = 0; j < la_size; j++)
-            printf("%c", elem->seq[j]);
-        printf("\toff %d\tlen %d\n", elem->off, elem->len);*/
-        for (i = 0; memcmp(&(elem->seq[i]), &(window[(la+i)%WINDOW_SIZE]), 1) == 0 && i < la_size-1; i++){}
+            printf("%x ", elem->seq[j]);
+        printf(" per ");
+        for(j = 0; j < la_size; j++)
+            printf("%x ", window[(la+j)%WINDOW_SIZE]);
+        printf("\n");*/
+        for (i = 0; (ret = memcmp(&(window[(la+i)%WINDOW_SIZE]), &(elem->seq[i]), 1)) == 0 && i < la_size-1; i++){}
         
         if (i > t->len){
             t->off = (la > elem->off) ? (la - elem->off) : (la + WINDOW_SIZE - elem->off);
             t->len = i;
             t->next = window[(la+i)%(WINDOW_SIZE)];
         }
+        
+        if (ret < 0)
+            elem = elem->left;
+        else if (ret > 0)
+            elem = elem->right;
+        else break;
     }
     
     return t;
