@@ -1,25 +1,48 @@
+/***************************************************************************
+ *          Lempel, Ziv Encoding and Decoding
+ *
+ *   File    : lz77.c
+ *   Authors : David Costa and Pietro De Rosa
+ *
+ ***************************************************************************/
+
+/***************************************************************************
+ *                             INCLUDED FILES
+ ***************************************************************************/
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 #include "getopt.h"
 #include "tree.h"
 
-#define LA_SIZE 15
-#define SB_SIZE 4095
+/***************************************************************************
+ *                                CONSTANTS
+ ***************************************************************************/
+#define LA_SIZE 15      // lookahead size
+#define SB_SIZE 4095    // search buffer size
 #define N 2
 #define WINDOW_SIZE ((SB_SIZE + LA_SIZE) * N)
 
+/***************************************************************************
+ *                            TYPE DEFINITIONS
+ *
+ * Each token is composed by a backward offset, the match's length and the
+ * next character in the lookahead.
+ * Offset : [0, SB_SIZE]            Length : [0, LA_SIZE]
+ ***************************************************************************/
 struct token{
     int off, len;
     char next;
 };
 
-typedef enum
-{
+typedef enum{
     ENCODE,
     DECODE
 } MODES;
 
+/***************************************************************************
+ *                         FUNCTIONS DECLARATION
+ ***************************************************************************/
 void encode(FILE *file, FILE *out);
 void decode(FILE *file, FILE *out);
 
@@ -28,15 +51,23 @@ struct token *readcode(FILE *file);
 
 struct token* match(struct node *tree, unsigned char *window, int la, int la_size);
 
-
+/***************************************************************************
+ *                            USER INTERFACE
+ * Syntax: ./lz77 <options>
+ * Options: -c: compression mode
+ *          -d: decompression mode
+ *          -i <filename>: input file
+ *          -o <filename>: output file
+ *          -h: help
+ ***************************************************************************/
 int main(int argc, char *argv[])
 {
-	// vars
+	/* variables */
     int opt;
     FILE *file = NULL, *out = NULL;
     MODES mode;
 	
-    // default mode
+    /* default mode */
     mode = ENCODE;
     
     while ((opt = getopt(argc, argv, "cdi:o:h")) != -1)
@@ -93,7 +124,7 @@ int main(int argc, char *argv[])
                 }
                 break;
             
-            case 'h':
+            case 'h':       /* help */
                 printf("Usage: lz77 <options>\n");
                 printf("  -c : Encode input file to output file.\n");
                 printf("  -d : Decode input file to output file.\n");
@@ -105,6 +136,7 @@ int main(int argc, char *argv[])
         }
     }
     
+    /* validate command line */
     if (file == NULL){
         fprintf(stderr, "Input file must be provided\n");
         
@@ -135,33 +167,45 @@ int main(int argc, char *argv[])
     return 0;
 }
 
-
+/***************************************************************************
+ *                            ENCODE FUNCTION
+ * Name         : encode - compress file
+ * Parameters   : file - file to encode
+ *                out - compressed file
+ ***************************************************************************/
 void encode(FILE *file, FILE *out)
 {
+    /* variables */
     int i, ret, h, count = 0, k;
     int c;
     struct node *tree = NULL;
     struct token *t = NULL;
     unsigned char *window, *seq;
-    int la_size, sb_size = 0;    // actual lookahead size
+    int la_size, sb_size = 0;    /* actual lookahead and search buffer size */
     
     int sb_index = 0, la_index = 0;
     window = (unsigned char*)malloc(WINDOW_SIZE);
     
+    /* fill the lookahead with the first LA_SIZE bytes or until EOF is reached */
     for(la_size = 0; la_size < LA_SIZE; la_size++){
         if((c = getc(file)) != EOF){
             window[la_size] = c;
         }else
             break;
     }
+    
+    /* find the longest match of the lookahead in the tree*/
     t = match(tree, window, la_index, la_size);
-    printf("<%d, %d, %c>\n\n", t->off, t->len, t->next);
 
+    /* write the token in the output file */
     writecode(t, out);
     count++;
     
+    
+    /* cycle from the 2nd iteration until the end */
 	while(la_size > 0){
 		
+        /* read as many bytes as matched in the previuos itaration */
         for(i = 0; i < t->len + 1; i++){
             c = getc(file);
             if(c != EOF){
@@ -170,25 +214,32 @@ void encode(FILE *file, FILE *out)
                 seq = (unsigned char*)malloc(la_size);
                 for(k = 0; k < la_size; k++)
                     memcpy(seq+k, &(window[(la_index+k)%WINDOW_SIZE]), 1);
+                
+                /* insert a new node in the tree */
                 insert(&tree, seq, la_index, la_size);
                 free(seq);
                 la_index = (la_index + 1) % (WINDOW_SIZE);
                 
+                /* if search buffer's length is max, the oldest node is removed from the tree */
                 if(sb_size == SB_SIZE){
                     delete(&tree, window, la_size, sb_index, WINDOW_SIZE);
                     sb_index = (sb_index + 1) % (WINDOW_SIZE);
                 }else
                     sb_size++;
             }
-            else{ // caso in cui EOF compaia prima del riempimento del lookahead
+            else{
+                /* case where we hit EOF before filling lookahead */
                 seq = (unsigned char*)malloc(la_size);
                 for(k = 0; k < la_size; k++)
                     memcpy(seq+k, &(window[(la_index+k)%WINDOW_SIZE]), 1);
+                
+                /* insert a new node in the tree */
                 insert(&tree, seq, la_index, la_size);
                 free(seq);
                 
                 la_index = (la_index + 1) % (WINDOW_SIZE);
                 
+                /* if search buffer's length is max, the oldest node is removed from the tree */
                 if(sb_size == SB_SIZE){
                     delete(&tree, window, la_size, sb_index, WINDOW_SIZE);
                     sb_index = (sb_index + 1) % (WINDOW_SIZE);
@@ -201,20 +252,28 @@ void encode(FILE *file, FILE *out)
         
         if(la_size > 0){
             free(t);
+            /* find the longest match of the lookahead in the tree*/
             t = match(tree, window, la_index, la_size);
-            printf("<%d, %d, %c>\n\n", t->off, t->len, t->next);
 
+            /* write the token in the output file */
             writecode(t, out);
             count++;
         }
 	}
     
-    printf("numero token: %d\n", count);
+    freetree(&tree);
     free(window);
 }
 
+/***************************************************************************
+ *                            DECODE FUNCTION
+ * Name         : decode - decompress file
+ * Parameters   : file - compressed file
+ *                out - output file
+ ***************************************************************************/
 void decode(FILE *file, FILE *out)
 {
+    /* variables */
     struct token *t;
     int front = 0, back = 0, off;
     unsigned char *buffer;
@@ -223,15 +282,21 @@ void decode(FILE *file, FILE *out)
     
     while(feof(file) == 0)
     {
+        /* read the code from the input file */
         t = readcode(file);
         if(t == NULL)
             break;
         
+        /* reconstruct the original byte*/
         while(t->len > 0)
         {
             off = (back - t->off >= 0) ? (back - t->off) : (back + (WINDOW_SIZE) - t->off);
             buffer[back] = buffer[off];
+            
+            /* write the byte in the output file*/
             putc(buffer[back], out);
+            
+            /* slide the circular array*/
             if(back == front)
                 front = (front + 1) % (WINDOW_SIZE);
             back = (back + 1) % (WINDOW_SIZE);
@@ -239,7 +304,11 @@ void decode(FILE *file, FILE *out)
             t->len--;
         }
         buffer[back] = t->next;
+        
+        /* write the byte in the output file*/
         putc(buffer[back], out);
+        
+        /* slide the circular array*/
         if(back == front)
             front = (front + 1) % (WINDOW_SIZE);
         back = (back + 1) % (WINDOW_SIZE);
@@ -248,29 +317,36 @@ void decode(FILE *file, FILE *out)
     free(buffer);
 }
 
+/***************************************************************************
+ *                            MATCH FUNCTION
+ * Name         : match - find the longest match in the tree
+ * Parameters   : tree - binary search tree
+ *                window - whole buffer
+ *                la - starting index of the lookahead
+ *                la_size - actual lookahead size
+ ***************************************************************************/
 struct token* match(struct node *tree, unsigned char *window, int la, int la_size)
 {
+    /* variables */
     struct token *t;
     struct node *elem;
     int i = 0, j, ret;
     
+    /* initialize the token as non-match token */
     t = (struct token*)malloc(sizeof(struct token));
     t->off = 0;
     t->len = 0;
     t->next = window[la];
     
-    //elem = find(tree, &(window[la]), la_size);
     elem = tree;
+    
+    /* flow the tree finding the longest match node */
     while (elem != NULL){
-        /*printf("Trovato: ");
-        for(j = 0; j < la_size; j++)
-            printf("%x ", elem->seq[j]);
-        printf(" per ");
-        for(j = 0; j < la_size; j++)
-            printf("%x ", window[(la+j)%WINDOW_SIZE]);
-        printf("\n");*/
+
+        /* look for how many characters are equal between the lookahead and the node */
         for (i = 0; (ret = memcmp(&(window[(la+i)%WINDOW_SIZE]), &(elem->seq[i]), 1)) == 0 && i < la_size-1; i++){}
         
+        /* if the new match is better than the previous one, save the token */
         if (i > t->len){
             t->off = (la > elem->off) ? (la - elem->off) : (la + WINDOW_SIZE - elem->off);
             t->len = i;
@@ -287,28 +363,54 @@ struct token* match(struct node *tree, unsigned char *window, int la, int la_siz
     return t;
 }
 
-void writecode(struct token *t, FILE *out) //  off = 12 bits, len = 4 bits, next = 8 bits
+/***************************************************************************
+ *                           WRITECODE FUNCTION
+ * Name         : writecode - write the token in the output file
+ * Parameters   : t - token to be written
+ *                out - output file
+ * Offset : 12 bits representation => [0, 4095]
+ * Length : 4 bits representation => [0, 15]
+ * Next char requires 8 bits
+ * Total token's size: 12 + 4 + 8 = 24 bits = 3 bytes
+ * 
+ *     0 1 2 3 4 5 6 7 0 1 2 3 4 5 6 7 0 1 2 3 4 5 6 7
+ *    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *    |         offset        |lenght |   next char   |
+ *    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ ***************************************************************************/
+void writecode(struct token *t, FILE *out)
 {
+    /* variables */
     unsigned char code[3];
     int i;
     
+    /* use masks to selectivly set the bits */
     code[0] = (unsigned char)t->off;
     code[1] = (unsigned char)((t->off >> 8) & 0x0f);
     code[1] = code[1] | (unsigned char)((t->len << 4) & 0xf0);
     code[2] = t->next;
     
+    /* write the code in the output file */
     for(i = 0; i < 3; i++)
         putc(code[i], out);
 }
 
+/***************************************************************************
+ *                          READCODE FUNCTION
+ * Name         : readcode - read the token from the compressed file
+ * Parameters   : file - compressed file
+ * Returned     : t - reconstructed token
+ ***************************************************************************/
 struct token *readcode(FILE *file)
 {
+    /* variables */
     struct token *t;
     unsigned char code[3];
     int ret;
     
     t = (struct token*)malloc(sizeof(struct token));
     
+    /* read code from file */
     ret = fread(code, 1, 3, file);
     if(feof(file) == 1)
         return NULL;
@@ -317,11 +419,10 @@ struct token *readcode(FILE *file)
         exit(1);
     }
     
+    /* use masks to selectivly set the bits */
     t->off = (((int)code[1] & 0x0000000f) << 8) | (int)code[0];
     t->len = ((int)code[1] & 0x000000f0) >> 4;
     t->next = code[2];
     
-    //printf("\n<%d, %d, %c>\n", t->off, t->len, t->next);
-
     return t;
 }

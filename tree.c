@@ -1,18 +1,34 @@
+/***************************************************************************
+ *          Lempel, Ziv Encoding and Decoding
+ *
+ *   File    : tree.c
+ *   Authors : David Costa and Pietro De Rosa
+ *
+ ***************************************************************************/
+
+/***************************************************************************
+ *                             INCLUDED FILES
+ ***************************************************************************/
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "tree.h"
 
-struct node{
-    unsigned char *seq;
-    int len, off;
-    struct node *left, *right;
-};
-
+/***************************************************************************
+ *                            INSERT FUNCTION
+ * Name         : insert - insert a node in the tree
+ * Parameters   : tree - root of the binary tree
+ *                seq - sequence of bytes to be inserted in the new node
+ *                off - offset of the sequence
+ *                len - length of the sequence
+ ***************************************************************************/
 void insert(struct node **tree, unsigned char *seq, int off, int len)
 {
+    /* variables */
     struct node * elem;
     int i;
 
+    /* create the new node and insert it in the tree */
     if (*tree == NULL){
         elem = (struct node*)malloc(sizeof(struct node));
         elem->off = off;
@@ -22,50 +38,33 @@ void insert(struct node **tree, unsigned char *seq, int off, int len)
         
         *tree = elem;
         (*tree)->left = (*tree)->right = NULL;
-        /*printf("Inserisco ");
-        for(i = 0; i < elem->len; i++)
-            printf("%c", elem->seq[i]);
-        printf("\t offset = %d\n", elem->off);*/
+
         return;
     }
-    if (memcmp(seq, (*tree)->seq, len) < 0){
-        //printf("inserisco sottoalbero sinistro\n");
+    
+    /* call recursively the function until the correct position is not found */
+    if (memcmp(seq, (*tree)->seq, len) < 0)
         insert(&((*tree)->left), seq, off, len);
-    }else{
-        //printf("inserisco sottoalbero destro\n");
+    else
         insert(&((*tree)->right), seq, off, len);
-    }
+    
 }
 
-struct node *find(struct node *tree, unsigned char *seq, int len)
-{
-    int ret;
-    
-    if (tree == NULL)
-        return NULL;
-    
-    ret = memcmp(seq, tree->seq, len);
-    
-    if (ret == 0)
-        return tree;
-    else if (ret < 0){
-        if (tree->left != NULL)
-            return find(tree->left, seq, len);
-        else
-            return tree;
-    }else{
-        if (tree->right != NULL)
-            return find(tree->right, seq, len);
-        else
-            return tree;
-    }
-}
-
+/***************************************************************************
+ *                           DELETE MINIMUM FUNCTION
+ * Name         : deleteMin - find the minimum node in the tree, delete it
+ *                and move its content in the correct position. It is called
+ *                whenever a node to be deleted has both the children
+ * Parameters   : tree - root of the binary tree
+ *                elem - node to be deleted
+ ***************************************************************************/
 void deleteMin(struct node **tree, struct node *elem)
 {
+    /* variables */
     struct node *tmp;
     int i;
     
+    /* call recursively the function util the minimum node is not found */
     if((*tree)->left != NULL)
         deleteMin(&((*tree)->left), elem);
     else{
@@ -76,66 +75,64 @@ void deleteMin(struct node **tree, struct node *elem)
         elem->off = (*tree)->off;
         tmp = (*tree);
         (*tree) = (*tree)->right;
+        
         free(tmp->seq);
         free(tmp);
-        /*printf("nodo min -> ");
-        for(i = 0; i < elem->len; i++)
-            printf("%c", elem->seq[i]);
-        printf("|%d\n", elem->off);*/
     }
 }
 
+/***************************************************************************
+ *                            DELETE FUNCTION
+ * Name         : delete - delete the node from the tree containing the
+ *                specific sequence and offset
+ * Parameters   : tree - root of the binary tree
+ *                seq - sequence to be contained by the node
+ *                len - length of the sequence
+ *                sb - actual starting index of the search buffer
+ *                win_size - whole window size
+ ***************************************************************************/
 void delete(struct node **tree, unsigned char *seq, int len, int sb, int win_size)
 {
+    /* variables */
     int ret, i;
     struct node *tmp;
     
     if ((*tree) != NULL){
-        /*printf("Confronto ");
-        for(i = 0; i < len; i++)
-            printf("%c", seq[(sb+i)%win_size]);
-        printf(" con il nodo ");
-        for(i = 0; i < (*tree)->len; i++)
-            printf("%c", (*tree)->seq[i]);
-        printf("\n");*/
         for(i = 0; i < len && (ret = memcmp(&(seq[(sb+i)%win_size]), &((*tree)->seq[i]), 1)) == 0; i++){}
-        if(ret < 0){
-            //printf("ret < 0\n");
+        
+        /* smaller node */
+        if(ret < 0)
             delete(&((*tree)->left), seq, len, sb, win_size);
-        }else if(ret > 0){
-            //printf("ret > 0\n");
+        /* greater node */
+        else if(ret > 0)
             delete(&((*tree)->right), seq, len, sb, win_size);
-        }else if((*tree)->off != sb){
-            //printf("ret = 0 & off(%d) != sb(%d)\n", (*tree)->off, sb);
+        /* match for the sequence but not for the offset */
+        else if((*tree)->off != sb)
             delete(&((*tree)->right), seq, len, sb, win_size);
-        }else if ((*tree)->left == NULL){
-            /*printf("Elimino ");
-            for(i = 0; i < (*tree)->len; i++)
-                printf("%c", (*tree)->seq[i]);
-            printf("\n");*/
+        /* match, just right son*/
+        else if ((*tree)->left == NULL){
             tmp = (*tree);
             (*tree) = (*tree)->right;
             free(tmp->seq);
             free(tmp);
+        /* match, just left son */
         }else if ((*tree)->right == NULL){
-            /*printf("Elimino ");
-            for(i = 0; i < (*tree)->len; i++)
-                printf("%c", (*tree)->seq[i]);
-            printf("\n");*/
             tmp = (*tree);
             (*tree) = (*tree)->left;
             free(tmp->seq);
             free(tmp);
-        }else{
-            /*printf("Elimino ");
-            for(i = 0; i < (*tree)->len; i++)
-                printf("%c", (*tree)->seq[i]);
-            printf("\n");*/
+        /* match, both children */
+        }else
             deleteMin(&((*tree)->right), (*tree));
-        }
     }
 }
 
+/***************************************************************************
+ *                           PRINT TREE FUNCTION
+ * Name         : printtree - print the whole tree in increasing order
+ * Parameters   : tree - root of the binary tree
+ * Just for debug
+ ***************************************************************************/
 void printtree(struct node *tree)
 {
     int i;
@@ -148,3 +145,21 @@ void printtree(struct node *tree)
     printtree(tree->right);
 }
 
+/***************************************************************************
+ *                           FREE TREE FUNCTION
+ * Name         : freetree - delete the whole tree from memory
+ * Parameters   : tree - root of the binary tree
+ ***************************************************************************/
+void freetree(struct node **tree)
+{
+    if (*tree == NULL)
+        return;
+    if ((*tree)->left != NULL)
+        freetree(&((*tree)->left));
+    if ((*tree)->right != NULL)
+        freetree(&((*tree)->right));
+    
+    free((*tree)->seq);
+    free(*tree);
+    (*tree) = NULL;
+}
