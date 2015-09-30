@@ -85,42 +85,20 @@ int main(int argc, char *argv[])
             case 'i':       /* input file name */
                 if (file != NULL){
                     fprintf(stderr, "Multiple input files not allowed.\n");
-                    fclose(file);
-                
-                    if (out != NULL){
-                        fclose(out);
-                    }
-                
-                    exit(EXIT_FAILURE);
+                    goto error;
                 }else if ((file = fopen(optarg, "rb")) == NULL){
                     perror("Opening inFile");
-                
-                    if (out != NULL){
-                        fclose(out);
-                    }
-                
-                    exit(EXIT_FAILURE);
+                    goto error;
                 }
                 break;
             
             case 'o':       /* output file name */
                 if (out != NULL){
                     fprintf(stderr, "Multiple output files not allowed.\n");
-                    fclose(out);
-                
-                    if (file != NULL){
-                        fclose(file);
-                    }
-                
-                    exit(EXIT_FAILURE);
+                    goto error;
                 }else if ((out = fopen(optarg, "w")) == NULL){
                     perror("Opening outFile");
-                
-                    if (file != NULL){
-                        fclose(file);
-                    }
-                
-                    exit(EXIT_FAILURE);
+                    goto error;
                 }
                 break;
             
@@ -139,21 +117,11 @@ int main(int argc, char *argv[])
     /* validate command line */
     if (file == NULL){
         fprintf(stderr, "Input file must be provided\n");
-        
-        if (out != NULL){
-            fclose(out);
-        }
-        
-        exit (EXIT_FAILURE);
+        goto error;
     }else if (out == NULL)
     {
         fprintf(stderr, "Output file must be provided\n");
-        
-        if (file != NULL){
-            fclose(file);
-        }
-        
-        exit (EXIT_FAILURE);
+        goto error;
     }
     
     if (mode == ENCODE){
@@ -165,6 +133,16 @@ int main(int argc, char *argv[])
     fclose(file);
     fclose(out);
     return 0;
+    
+    /* handle error */
+error:
+    if (file != NULL){
+        fclose(file);
+    }
+    if (out != NULL){
+        fclose(out);
+    }
+    exit (EXIT_FAILURE);
 }
 
 /***************************************************************************
