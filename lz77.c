@@ -18,8 +18,8 @@
 /***************************************************************************
  *                                CONSTANTS
  ***************************************************************************/
-#define LA_SIZE 15      // lookahead size
-#define SB_SIZE 4095    // search buffer size
+#define LA_SIZE 15      /* lookahead size */
+#define SB_SIZE 4095    /* search buffer size */
 #define N 2
 #define WINDOW_SIZE ((SB_SIZE + LA_SIZE) * N)
 
@@ -46,10 +46,10 @@ typedef enum{
 void encode(FILE *file, FILE *out);
 void decode(FILE *file, FILE *out);
 
-void writecode(struct token *t, FILE *out);
-struct token *readcode(FILE *file);
+void writecode(struct token t, FILE *out);
+struct token readcode(FILE *file);
 
-struct token* match(struct node *tree, unsigned char *window, int la, int la_size);
+struct token match(struct node *tree, unsigned char *window, int la, int la_size);
 
 /***************************************************************************
  *                            USER INTERFACE
@@ -109,7 +109,7 @@ int main(int argc, char *argv[])
                     fclose(out);
                 
                     if (file != NULL){
-                        fclose(out);
+                        fclose(file);
                     }
                 
                     exit(EXIT_FAILURE);
@@ -176,10 +176,10 @@ int main(int argc, char *argv[])
 void encode(FILE *file, FILE *out)
 {
     /* variables */
-    int i, ret, h, count = 0, k;
+    int i, count = 0, k;
     int c;
     struct node *tree = NULL;
-    struct token *t = NULL;
+    struct token t;
     unsigned char *window, *seq;
     int la_size, sb_size = 0;    /* actual lookahead and search buffer size */
     
@@ -206,7 +206,7 @@ void encode(FILE *file, FILE *out)
 	while(la_size > 0){
 		
         /* read as many bytes as matched in the previuos itaration */
-        for(i = 0; i < t->len + 1; i++){
+        for(i = 0; i < t.len + 1; i++){
             c = getc(file);
             if(c != EOF){
                 window[(la_index+la_size)%(WINDOW_SIZE)] = c;
@@ -251,7 +251,7 @@ void encode(FILE *file, FILE *out)
         }
         
         if(la_size > 0){
-            free(t);
+            //free(t);
             /* find the longest match of the lookahead in the tree*/
             t = match(tree, window, la_index, la_size);
 
@@ -274,7 +274,7 @@ void encode(FILE *file, FILE *out)
 void decode(FILE *file, FILE *out)
 {
     /* variables */
-    struct token *t;
+    struct token t;
     int front = 0, back = 0, off;
     unsigned char *buffer;
     
@@ -284,13 +284,13 @@ void decode(FILE *file, FILE *out)
     {
         /* read the code from the input file */
         t = readcode(file);
-        if(t == NULL)
+        if(t.off == -1)
             break;
         
         /* reconstruct the original byte*/
-        while(t->len > 0)
+        while(t.len > 0)
         {
-            off = (back - t->off >= 0) ? (back - t->off) : (back + (WINDOW_SIZE) - t->off);
+            off = (back - t.off >= 0) ? (back - t.off) : (back + (WINDOW_SIZE) - t.off);
             buffer[back] = buffer[off];
             
             /* write the byte in the output file*/
@@ -301,9 +301,9 @@ void decode(FILE *file, FILE *out)
                 front = (front + 1) % (WINDOW_SIZE);
             back = (back + 1) % (WINDOW_SIZE);
             
-            t->len--;
+            t.len--;
         }
-        buffer[back] = t->next;
+        buffer[back] = t.next;
         
         /* write the byte in the output file*/
         putc(buffer[back], out);
@@ -319,46 +319,27 @@ void decode(FILE *file, FILE *out)
 
 /***************************************************************************
  *                            MATCH FUNCTION
- * Name         : match - find the longest match in the tree
+ * Name         : match - find the longest match and create the token
  * Parameters   : tree - binary search tree
  *                window - whole buffer
  *                la - starting index of the lookahead
  *                la_size - actual lookahead size
+ * Returned     : token of the best match
  ***************************************************************************/
-struct token* match(struct node *tree, unsigned char *window, int la, int la_size)
+struct token match(struct node *tree, unsigned char *window, int la, int la_size)
 {
     /* variables */
-    struct token *t;
-    struct node *elem;
-    int i = 0, j, ret;
+    struct token t;
+    int *ret;
     
-    /* initialize the token as non-match token */
-    t = (struct token*)malloc(sizeof(struct token));
-    t->off = 0;
-    t->len = 0;
-    t->next = window[la];
+    /* find the longest match */
+    ret = find(tree, window, la, la_size, WINDOW_SIZE);
     
-    elem = tree;
-    
-    /* flow the tree finding the longest match node */
-    while (elem != NULL){
-
-        /* look for how many characters are equal between the lookahead and the node */
-        for (i = 0; (ret = memcmp(&(window[(la+i)%WINDOW_SIZE]), &(elem->seq[i]), 1)) == 0 && i < la_size-1; i++){}
-        
-        /* if the new match is better than the previous one, save the token */
-        if (i > t->len){
-            t->off = (la > elem->off) ? (la - elem->off) : (la + WINDOW_SIZE - elem->off);
-            t->len = i;
-            t->next = window[(la+i)%(WINDOW_SIZE)];
-        }
-        
-        if (ret < 0)
-            elem = elem->left;
-        else if (ret > 0)
-            elem = elem->right;
-        else break;
-    }
+    /* create the token */
+    //t = (struct token*)malloc(sizeof(struct token));
+    t.off = ret[0];
+    t.len = ret[1];
+    t.next = window[(la+ret[1])%WINDOW_SIZE];
     
     return t;
 }
@@ -378,17 +359,17 @@ struct token* match(struct node *tree, unsigned char *window, int la, int la_siz
  *    |         offset        |lenght |   next char   |
  *    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
  ***************************************************************************/
-void writecode(struct token *t, FILE *out)
+void writecode(struct token t, FILE *out)
 {
     /* variables */
     unsigned char code[3];
     int i;
     
     /* use masks to selectivly set the bits */
-    code[0] = (unsigned char)t->off;
-    code[1] = (unsigned char)((t->off >> 8) & 0x0f);
-    code[1] = code[1] | (unsigned char)((t->len << 4) & 0xf0);
-    code[2] = t->next;
+    code[0] = (unsigned char)t.off;
+    code[1] = (unsigned char)((t.off >> 8) & 0x0f);
+    code[1] = code[1] | (unsigned char)((t.len << 4) & 0xf0);
+    code[2] = t.next;
     
     /* write the code in the output file */
     for(i = 0; i < 3; i++)
@@ -401,28 +382,28 @@ void writecode(struct token *t, FILE *out)
  * Parameters   : file - compressed file
  * Returned     : t - reconstructed token
  ***************************************************************************/
-struct token *readcode(FILE *file)
+struct token readcode(FILE *file)
 {
     /* variables */
-    struct token *t;
+    struct token t;
     unsigned char code[3];
     int ret;
     
-    t = (struct token*)malloc(sizeof(struct token));
-    
     /* read code from file */
     ret = fread(code, 1, 3, file);
-    if(feof(file) == 1)
-        return NULL;
+    if(feof(file) == 1){
+        t.off = -1;
+        return t;
+    }
     if(ret < 3){
         perror("Error reading file.");
         exit(1);
     }
     
     /* use masks to selectivly set the bits */
-    t->off = (((int)code[1] & 0x0000000f) << 8) | (int)code[0];
-    t->len = ((int)code[1] & 0x000000f0) >> 4;
-    t->next = code[2];
+    t.off = (((int)code[1] & 0x0000000f) << 8) | (int)code[0];
+    t.len = ((int)code[1] & 0x000000f0) >> 4;
+    t.next = code[2];
     
     return t;
 }

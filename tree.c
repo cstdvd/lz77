@@ -14,6 +14,11 @@
 #include <string.h>
 #include "tree.h"
 
+struct node{
+    unsigned char *seq;
+    int len, off;
+    struct node *left, *right;
+};
 /***************************************************************************
  *                            INSERT FUNCTION
  * Name         : insert - insert a node in the tree
@@ -26,7 +31,6 @@ void insert(struct node **tree, unsigned char *seq, int off, int len)
 {
     /* variables */
     struct node * elem;
-    int i;
 
     /* create the new node and insert it in the tree */
     if (*tree == NULL){
@@ -51,6 +55,50 @@ void insert(struct node **tree, unsigned char *seq, int off, int len)
 }
 
 /***************************************************************************
+ *                            FIND FUNCTION
+ * Name         : find - find the longest match in the tree
+ * Parameters   : tree - binary search tree
+ *                window - whole buffer
+ *                index - starting index of the lookahead
+ *                size - actual lookahead size
+ * Returned     : best match's offset and length
+ ***************************************************************************/
+int* find(struct node *tree, unsigned char *window, int index, int size, int win_size)
+{
+    /* variables */
+    int i, ret;
+    int *off_len;
+    
+    off_len = (int*)malloc(sizeof(int) * 2);
+    
+    /* initialize as non-match values */
+    off_len[0] = 0;
+    off_len[1] = 0;
+    
+    /* flow the tree finding the longest match node */
+    while (tree != NULL){
+        
+        /* look for how many characters are equal between the lookahead and the node */
+        for (i = 0; (ret = memcmp(&(window[(index+i)%win_size]), &(tree->seq[i]), 1)) == 0 && i < size-1; i++){}
+        
+        /* if the new match is better than the previous one, save the token */
+        if (i > off_len[1]){
+            off_len[0] = (index > tree->off) ? (index - tree->off) : (index + win_size - tree->off);
+            off_len[1] = i;
+            //t->next = window[(la+i)%(WINDOW_SIZE)];
+        }
+        
+        if (ret < 0)
+            tree = tree->left;
+        else if (ret > 0)
+            tree = tree->right;
+        else break;
+    }
+    
+    return off_len;
+}
+
+/***************************************************************************
  *                           DELETE MINIMUM FUNCTION
  * Name         : deleteMin - find the minimum node in the tree, delete it
  *                and move its content in the correct position. It is called
@@ -62,7 +110,6 @@ void deleteMin(struct node **tree, struct node *elem)
 {
     /* variables */
     struct node *tmp;
-    int i;
     
     /* call recursively the function util the minimum node is not found */
     if((*tree)->left != NULL)
