@@ -14,44 +14,68 @@
 #include <string.h>
 #include "tree.h"
 
+/***************************************************************************
+ *                            TYPE DEFINITIONS
+ * Nodes are composed by a sequence of bytes, length of the sequence,
+ * absolute offset of the sequence in the window and the node's children
+ ***************************************************************************/
 struct node{
-    unsigned char *seq;
     int len, off;
-    struct node *left, *right;
+    int left, right;
 };
+
+
+int findFreeIndex(struct node *tree, int max)
+{
+    int i = 0;
+    
+    while (i <max && tree[i].off != -1)
+        i++;
+    
+    return i;
+}
+
+
+void initialize(struct node *tree, int max)
+{
+    int i;
+    
+    for (i = 0; i < max; i++)
+        tree[i].off = -1;
+}
+
 /***************************************************************************
  *                            INSERT FUNCTION
  * Name         : insert - insert a node in the tree
- * Parameters   : tree - root of the binary tree
+ * Parameters   : tree - pointer to the binary tree array
+ *                root - index of the root in the array
  *                seq - sequence of bytes to be inserted in the new node
  *                off - offset of the sequence
  *                len - length of the sequence
  ***************************************************************************/
-void insert(struct node **tree, unsigned char *seq, int off, int len)
+void insert(struct node *tree, int root, unsigned char *window, int off, int len, int max)
 {
-    /* variables */
-    struct node * elem;
-
     /* create the new node and insert it in the tree */
-    if (*tree == NULL){
-        elem = (struct node*)malloc(sizeof(struct node));
-        elem->off = off;
-        elem->len = len;
-        elem->seq = (unsigned char*)malloc(len);
-        memcpy(elem->seq, seq, len);
+    if (tree[root].off == -1){
+        tree[root].off = off;
+        tree[root].len = len;
         
-        *tree = elem;
-        (*tree)->left = (*tree)->right = NULL;
+        tree[root].left = -1;
+        tree[root].right = -1;
 
         return;
     }
     
     /* call recursively the function until the correct position is not found */
-    if (memcmp(seq, (*tree)->seq, len) < 0)
-        insert(&((*tree)->left), seq, off, len);
-    else
-        insert(&((*tree)->right), seq, off, len);
-    
+    if (memcmp(&(window[off]), &(window[tree[root].off]), len) < 0){
+        if (tree[root].left == -1)
+            tree[root].left = findFreeIndex(tree, max);
+        insert(tree, tree[root].left, window, off, len, max);
+    }else{
+        if (tree[root].right == -1)
+            tree[root].right = findFreeIndex(tree, max);
+        insert(tree, tree[root].right, window, off, len, max);
+    }
 }
 
 /***************************************************************************
@@ -63,10 +87,10 @@ void insert(struct node **tree, unsigned char *seq, int off, int len)
  *                size - actual lookahead size
  * Returned     : best match's offset and length
  ***************************************************************************/
-int* find(struct node *tree, unsigned char *window, int index, int size, int win_size)
+int* find(struct node *tree, unsigned char *window, int index, int size)
 {
     /* variables */
-    int i, ret;
+    int i, ret, root = 0;
     int *off_len;
     
     off_len = (int*)malloc(sizeof(int) * 2);
@@ -76,22 +100,21 @@ int* find(struct node *tree, unsigned char *window, int index, int size, int win
     off_len[1] = 0;
     
     /* flow the tree finding the longest match node */
-    while (tree != NULL){
+    while (tree[root].off != -1){
         
         /* look for how many characters are equal between the lookahead and the node */
-        for (i = 0; (ret = memcmp(&(window[(index+i)%win_size]), &(tree->seq[i]), 1)) == 0 && i < size-1; i++){}
+        for (i = 0; (ret = memcmp(&(window[index+i]), &(window[tree[root].off + i]), 1)) == 0 && i < size-1; i++){}
         
         /* if the new match is better than the previous one, save the token */
         if (i > off_len[1]){
-            off_len[0] = (index > tree->off) ? (index - tree->off) : (index + win_size - tree->off);
+            off_len[0] = index - tree[root].off;
             off_len[1] = i;
-            //t->next = window[(la+i)%(WINDOW_SIZE)];
         }
         
-        if (ret < 0)
-            tree = tree->left;
-        else if (ret > 0)
-            tree = tree->right;
+        if (ret < 0 && tree[root].left != -1)
+            root = tree[root].left;
+        else if (ret > 0 && tree[root].right != -1)
+            root = tree[root].right;
         else break;
     }
     
@@ -106,25 +129,16 @@ int* find(struct node *tree, unsigned char *window, int index, int size, int win
  * Parameters   : tree - root of the binary tree
  *                elem - node to be deleted
  ***************************************************************************/
-void deleteMin(struct node **tree, struct node *elem)
+void deleteMin(struct node *tree, int del, int min, int *parentChild)
 {
-    /* variables */
-    struct node *tmp;
-    
     /* call recursively the function util the minimum node is not found */
-    if((*tree)->left != NULL)
-        deleteMin(&((*tree)->left), elem);
+    if(tree[min].left != -1)
+        deleteMin(tree, del, tree[min].left, &(tree[min].left));
     else{
-        free(elem->seq);
-        elem->seq = (unsigned char*)malloc((*tree)->len);
-        memcpy(elem->seq, (*tree)->seq, (*tree)->len);
-        elem->len = (*tree)->len;
-        elem->off = (*tree)->off;
-        tmp = (*tree);
-        (*tree) = (*tree)->right;
-        
-        free(tmp->seq);
-        free(tmp);
+        tree[del].off = tree[min].off;
+        tree[del].len = tree[min].len;
+        tree[min].off = -1;
+        *parentChild = tree[min].right;
     }
 }
 
@@ -138,75 +152,73 @@ void deleteMin(struct node **tree, struct node *elem)
  *                sb - actual starting index of the search buffer
  *                win_size - whole window size
  ***************************************************************************/
-void delete(struct node **tree, unsigned char *seq, int len, int sb, int win_size)
+void delete(struct node *tree, int *root, unsigned char *window, int len, int sb)
 {
     /* variables */
     int ret, i;
-    struct node *tmp;
-    
-    if ((*tree) != NULL){
-        for(i = 0; i < len && (ret = memcmp(&(seq[(sb+i)%win_size]), &((*tree)->seq[i]), 1)) == 0; i++){}
+    if (tree[*root].off != -1){
+        ret = memcmp(&(window[sb]), &(window[tree[*root].off]), len);
+        printf("Comparo \"");
+        for (i = 0; i < len; i++)
+            printf("%c", window[sb+i]);
+        printf("\" con \"");
+        for (i = 0; i < len; i++)
+            printf("%c", window[tree[*root].off + i]);
+        printf("\", off: %d\n", tree[*root].off);
         
         /* smaller node */
         if(ret < 0)
-            delete(&((*tree)->left), seq, len, sb, win_size);
+            delete(tree, &(tree[*root].left), window, len, sb);
         /* greater node */
         else if(ret > 0)
-            delete(&((*tree)->right), seq, len, sb, win_size);
+            delete(tree, &(tree[*root].right), window, len, sb);
         /* match for the sequence but not for the offset */
-        else if((*tree)->off != sb)
-            delete(&((*tree)->right), seq, len, sb, win_size);
-        /* match, just right son*/
-        else if ((*tree)->left == NULL){
-            tmp = (*tree);
-            (*tree) = (*tree)->right;
-            free(tmp->seq);
-            free(tmp);
-        /* match, just left son */
-        }else if ((*tree)->right == NULL){
-            tmp = (*tree);
-            (*tree) = (*tree)->left;
-            free(tmp->seq);
-            free(tmp);
+        else if(tree[*root].off != sb)
+            delete(tree, &(tree[*root].right), window, len, sb);
+        /* match, just right child */
+        else if (tree[*root].left == -1){
+            tree[*root].off = -1;
+            *root = tree[*root].right;
+        /* match, just left child */
+        }else if (tree[*root].right == -1){
+            tree[*root].off = -1;
+            *root = tree[*root].left;
         /* match, both children */
-        }else
-            deleteMin(&((*tree)->right), (*tree));
+        }else{
+            deleteMin(tree, *root, tree[*root].right, &(tree[*root].right));
+        }
+    }
+}
+
+/***************************************************************************
+ *                         UPDATE OFFSET FUNCTION
+ * Name         : updateOffset - update the offset when the buffer is shifted
+ * Parameters   : tree - binary tree
+ *                n - value to be subtracted
+ *                max - length of the array
+ ***************************************************************************/
+void updateOffset(struct node *tree, int n, int max)
+{
+    int i;
+    
+    for (i = 0; i < max; i++){
+        if (tree[i].off != -1)
+            tree[i].off -= n;
     }
 }
 
 /***************************************************************************
  *                           PRINT TREE FUNCTION
  * Name         : printtree - print the whole tree in increasing order
- * Parameters   : tree - root of the binary tree
+ * Parameters   : tree - binary tree
+ *                root - node's index
  * Just for debug
  ***************************************************************************/
-void printtree(struct node *tree)
+void printtree(struct node *tree, int root)
 {
-    int i;
-    if (tree == NULL)
-        return;
-    printtree(tree->left);
-    for(i = 0; i < tree->len; i++)
-        printf("%c", tree->seq[i]);
-    printf("\toff %d\n", tree->off);
-    printtree(tree->right);
-}
-
-/***************************************************************************
- *                           FREE TREE FUNCTION
- * Name         : freetree - delete the whole tree from memory
- * Parameters   : tree - root of the binary tree
- ***************************************************************************/
-void freetree(struct node **tree)
-{
-    if (*tree == NULL)
-        return;
-    if ((*tree)->left != NULL)
-        freetree(&((*tree)->left));
-    if ((*tree)->right != NULL)
-        freetree(&((*tree)->right));
-    
-    free((*tree)->seq);
-    free(*tree);
-    (*tree) = NULL;
+    if (tree[root].left != -1)
+        printtree(tree, tree[root].left);
+    printf("off %d in %d\n", tree[root].off, root);
+    if (tree[root].right != -1)
+        printtree(tree, tree[root].right);
 }

@@ -19,7 +19,7 @@
  *                                CONSTANTS
  ***************************************************************************/
 #define LA_SIZE 15      /* lookahead size */
-#define SB_SIZE 4095    /* search buffer size */
+#define SB_SIZE 512    /* search buffer size */
 #define N 2
 #define WINDOW_SIZE ((SB_SIZE + LA_SIZE) * N)
 
@@ -33,6 +33,11 @@
 struct token{
     int off, len;
     char next;
+};
+
+struct node{
+    int len, off;
+    int left, right;
 };
 
 typedef enum{
@@ -87,7 +92,7 @@ int main(int argc, char *argv[])
                     fprintf(stderr, "Multiple input files not allowed.\n");
                     goto error;
                 }else if ((file = fopen(optarg, "rb")) == NULL){
-                    perror("Opening inFile");
+                    perror("Opening input file");
                     goto error;
                 }
                 break;
@@ -97,7 +102,7 @@ int main(int argc, char *argv[])
                     fprintf(stderr, "Multiple output files not allowed.\n");
                     goto error;
                 }else if ((out = fopen(optarg, "w")) == NULL){
-                    perror("Opening outFile");
+                    perror("Opening output file");
                     goto error;
                 }
                 break;
@@ -154,15 +159,16 @@ error:
 void encode(FILE *file, FILE *out)
 {
     /* variables */
-    int i, count = 0, k;
+    int i, count = 0, root = 0;
     int c;
-    struct node *tree = NULL;
+    struct node tree[SB_SIZE+1];
     struct token t;
-    unsigned char *window, *seq;
+    unsigned char window[WINDOW_SIZE];
     int la_size, sb_size = 0;    /* actual lookahead and search buffer size */
     
     int sb_index = 0, la_index = 0;
-    window = (unsigned char*)malloc(WINDOW_SIZE);
+    
+    initialize(tree, SB_SIZE+1);
     
     /* fill the lookahead with the first LA_SIZE bytes or until EOF is reached */
     for(la_size = 0; la_size < LA_SIZE; la_size++){
@@ -174,6 +180,7 @@ void encode(FILE *file, FILE *out)
     
     /* find the longest match of the lookahead in the tree*/
     t = match(tree, window, la_index, la_size);
+    //printf("<%d, %d, %c>\n", t.off, t.len, t.next);
 
     /* write the token in the output file */
     writecode(t, out);
@@ -183,44 +190,44 @@ void encode(FILE *file, FILE *out)
     /* cycle from the 2nd iteration until the end */
 	while(la_size > 0){
 		
+        /* scroll backward the buffer when it is almost full */
+        if (la_index+la_size+t.len > WINDOW_SIZE-1){
+            memcpy(window, &(window[sb_index]), sb_size+la_size);
+            updateOffset(tree, sb_index, SB_SIZE+1);
+            sb_index = 0;
+            la_index = sb_size;
+        }
+        
         /* read as many bytes as matched in the previuos itaration */
         for(i = 0; i < t.len + 1; i++){
             c = getc(file);
             if(c != EOF){
-                window[(la_index+la_size)%(WINDOW_SIZE)] = c;
-                
-                seq = (unsigned char*)malloc(la_size);
-                for(k = 0; k < la_size; k++)
-                    memcpy(seq+k, &(window[(la_index+k)%WINDOW_SIZE]), 1);
+                window[la_index+la_size] = c;
                 
                 /* insert a new node in the tree */
-                insert(&tree, seq, la_index, la_size);
-                free(seq);
-                la_index = (la_index + 1) % (WINDOW_SIZE);
+                insert(tree, root, window, la_index, la_size, SB_SIZE);
+                la_index++;
                 
                 /* if search buffer's length is max, the oldest node is removed from the tree */
                 if(sb_size == SB_SIZE){
-                    delete(&tree, window, la_size, sb_index, WINDOW_SIZE);
-                    sb_index = (sb_index + 1) % (WINDOW_SIZE);
+                    root = 0;
+                    delete(tree, &root, window, la_size, sb_index);
+                    sb_index++;
                 }else
                     sb_size++;
             }
             else{
                 /* case where we hit EOF before filling lookahead */
-                seq = (unsigned char*)malloc(la_size);
-                for(k = 0; k < la_size; k++)
-                    memcpy(seq+k, &(window[(la_index+k)%WINDOW_SIZE]), 1);
                 
                 /* insert a new node in the tree */
-                insert(&tree, seq, la_index, la_size);
-                free(seq);
-                
-                la_index = (la_index + 1) % (WINDOW_SIZE);
+                insert(tree, root, window, la_index, la_size, SB_SIZE);
+                la_index++;
                 
                 /* if search buffer's length is max, the oldest node is removed from the tree */
                 if(sb_size == SB_SIZE){
-                    delete(&tree, window, la_size, sb_index, WINDOW_SIZE);
-                    sb_index = (sb_index + 1) % (WINDOW_SIZE);
+                    root = 0;
+                    delete(tree, &root, window, la_size, sb_index);
+                    sb_index++;
                 }else
                     sb_size++;
                 
@@ -232,15 +239,13 @@ void encode(FILE *file, FILE *out)
             //free(t);
             /* find the longest match of the lookahead in the tree*/
             t = match(tree, window, la_index, la_size);
+            //printf("<%d, %d, %c>\n", t.off, t.len, t.next);
 
             /* write the token in the output file */
             writecode(t, out);
             count++;
         }
 	}
-    
-    freetree(&tree);
-    free(window);
 }
 
 /***************************************************************************
@@ -253,10 +258,8 @@ void decode(FILE *file, FILE *out)
 {
     /* variables */
     struct token t;
-    int front = 0, back = 0, off;
-    unsigned char *buffer;
-    
-    buffer = (unsigned char*)malloc(WINDOW_SIZE);
+    int back = 0, off;
+    unsigned char buffer[WINDOW_SIZE];
     
     while(feof(file) == 0)
     {
@@ -265,20 +268,22 @@ void decode(FILE *file, FILE *out)
         if(t.off == -1)
             break;
         
+        if(back + t.len > WINDOW_SIZE - 1){
+            memcpy(buffer, &(buffer[back - SB_SIZE]), SB_SIZE);
+            back = SB_SIZE;
+        }
+        
         /* reconstruct the original byte*/
         while(t.len > 0)
         {
-            off = (back - t.off >= 0) ? (back - t.off) : (back + (WINDOW_SIZE) - t.off);
+            off = back - t.off;
             buffer[back] = buffer[off];
             
             /* write the byte in the output file*/
             putc(buffer[back], out);
             
             /* slide the circular array*/
-            if(back == front)
-                front = (front + 1) % (WINDOW_SIZE);
-            back = (back + 1) % (WINDOW_SIZE);
-            
+            back++;
             t.len--;
         }
         buffer[back] = t.next;
@@ -287,13 +292,11 @@ void decode(FILE *file, FILE *out)
         putc(buffer[back], out);
         
         /* slide the circular array*/
-        if(back == front)
-            front = (front + 1) % (WINDOW_SIZE);
-        back = (back + 1) % (WINDOW_SIZE);
+        back++;
     }
     
-    free(buffer);
 }
+
 
 /***************************************************************************
  *                            MATCH FUNCTION
@@ -311,13 +314,12 @@ struct token match(struct node *tree, unsigned char *window, int la, int la_size
     int *ret;
     
     /* find the longest match */
-    ret = find(tree, window, la, la_size, WINDOW_SIZE);
+    ret = find(tree, window, la, la_size);
     
     /* create the token */
-    //t = (struct token*)malloc(sizeof(struct token));
     t.off = ret[0];
     t.len = ret[1];
-    t.next = window[(la+ret[1])%WINDOW_SIZE];
+    t.next = window[la+ret[1]];
     
     return t;
 }
@@ -368,7 +370,7 @@ struct token readcode(FILE *file)
     int ret;
     
     /* read code from file */
-    ret = fread(code, 1, 3, file);
+    ret = (int)fread(code, 1, 3, file);
     if(feof(file) == 1){
         t.off = -1;
         return t;
