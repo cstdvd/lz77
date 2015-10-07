@@ -62,6 +62,10 @@ void insert(struct node *tree, int root, unsigned char *window, int off, int len
         
         tree[root].left = -1;
         tree[root].right = -1;
+        /*printf("Inserito ");
+        for (j = 0; j < len; j++)
+            printf("%c", window[tree[root].off + j]);
+        printf(" off:%d in %d\n", tree[root].off, root);*/
 
         return;
     }
@@ -70,10 +74,12 @@ void insert(struct node *tree, int root, unsigned char *window, int off, int len
     if (memcmp(&(window[off]), &(window[tree[root].off]), len) < 0){
         if (tree[root].left == -1)
             tree[root].left = findFreeIndex(tree, max);
+        //printf("Inserisco a sinistra: %d\n", tree[root].left);
         insert(tree, tree[root].left, window, off, len, max);
     }else{
         if (tree[root].right == -1)
             tree[root].right = findFreeIndex(tree, max);
+        //printf("Inserisco a destra: %d\n", tree[root].right);
         insert(tree, tree[root].right, window, off, len, max);
     }
 }
@@ -87,10 +93,10 @@ void insert(struct node *tree, int root, unsigned char *window, int off, int len
  *                size - actual lookahead size
  * Returned     : best match's offset and length
  ***************************************************************************/
-int* find(struct node *tree, unsigned char *window, int index, int size)
+int* find(struct node *tree, int root, unsigned char *window, int index, int size)
 {
     /* variables */
-    int i, ret, root = 0;
+    int i, j, ret;
     int *off_len;
     
     off_len = (int*)malloc(sizeof(int) * 2);
@@ -99,22 +105,24 @@ int* find(struct node *tree, unsigned char *window, int index, int size)
     off_len[0] = 0;
     off_len[1] = 0;
     
+    j = root;
+    
     /* flow the tree finding the longest match node */
-    while (tree[root].off != -1){
+    while (tree[j].off != -1){
         
         /* look for how many characters are equal between the lookahead and the node */
-        for (i = 0; (ret = memcmp(&(window[index+i]), &(window[tree[root].off + i]), 1)) == 0 && i < size-1; i++){}
+        for (i = 0; (ret = memcmp(&(window[index+i]), &(window[tree[j].off + i]), 1)) == 0 && i < size-1; i++){}
         
         /* if the new match is better than the previous one, save the token */
         if (i > off_len[1]){
-            off_len[0] = index - tree[root].off;
+            off_len[0] = index - tree[j].off;
             off_len[1] = i;
         }
         
-        if (ret < 0 && tree[root].left != -1)
-            root = tree[root].left;
-        else if (ret > 0 && tree[root].right != -1)
-            root = tree[root].right;
+        if (ret < 0 && tree[j].left != -1)
+            j = tree[j].left;
+        else if (ret > 0 && tree[j].right != -1)
+            j = tree[j].right;
         else break;
     }
     
@@ -135,10 +143,13 @@ void deleteMin(struct node *tree, int del, int min, int *parentChild)
     if(tree[min].left != -1)
         deleteMin(tree, del, tree[min].left, &(tree[min].left));
     else{
+        //printf("Sposto %d in %d\n", min, del);
         tree[del].off = tree[min].off;
         tree[del].len = tree[min].len;
         tree[min].off = -1;
         *parentChild = tree[min].right;
+        tree[min].right = -1;
+        tree[min].left = -1;
     }
 }
 
@@ -146,46 +157,70 @@ void deleteMin(struct node *tree, int del, int min, int *parentChild)
  *                            DELETE FUNCTION
  * Name         : delete - delete the node from the tree containing the
  *                specific sequence and offset
- * Parameters   : tree - root of the binary tree
- *                seq - sequence to be contained by the node
+ * Parameters   : tree - binary tree
+ *                root - root of the binary tree
+ *                window - buffer
  *                len - length of the sequence
  *                sb - actual starting index of the search buffer
- *                win_size - whole window size
  ***************************************************************************/
 void delete(struct node *tree, int *root, unsigned char *window, int len, int sb)
 {
     /* variables */
-    int ret, i;
-    if (tree[*root].off != -1){
-        ret = memcmp(&(window[sb]), &(window[tree[*root].off]), len);
-        printf("Comparo \"");
-        for (i = 0; i < len; i++)
-            printf("%c", window[sb+i]);
+    int ret, i, *parentChild = NULL;
+    
+    i = *root;
+    //printf("Parto da %d\n", *root);
+    
+    while (tree[i].off != -1){
+        ret = memcmp(&(window[sb]), &(window[tree[i].off]), len);
+        /*printf("Comparo");
+        for (j = 0; j < len; j++)
+            printf("%c", window[sb+j]);
         printf("\" con \"");
-        for (i = 0; i < len; i++)
-            printf("%c", window[tree[*root].off + i]);
-        printf("\", off: %d\n", tree[*root].off);
+        for (j = 0; j < len; j++)
+            printf("%c", window[tree[i].off + j]);
+        printf(" off1: %d off2: %d ret: %d\n", sb, tree[i].off, ret);*/
         
-        /* smaller node */
-        if(ret < 0)
-            delete(tree, &(tree[*root].left), window, len, sb);
-        /* greater node */
-        else if(ret > 0)
-            delete(tree, &(tree[*root].right), window, len, sb);
-        /* match for the sequence but not for the offset */
-        else if(tree[*root].off != sb)
-            delete(tree, &(tree[*root].right), window, len, sb);
-        /* match, just right child */
-        else if (tree[*root].left == -1){
-            tree[*root].off = -1;
-            *root = tree[*root].right;
-        /* match, just left child */
-        }else if (tree[*root].right == -1){
-            tree[*root].off = -1;
-            *root = tree[*root].left;
-        /* match, both children */
+        if (ret < 0){
+            parentChild = &(tree[i].left);
+            i = tree[i].left;
+            //printf("Vado a sinistra: %d\n", i);
+        }else if (ret > 0){
+            parentChild = &(tree[i].right);
+            i = tree[i].right;
+            //printf("Vado a destra: %d\n", i);
+        }else if (tree[i].off != sb){
+            parentChild = &(tree[i].right);
+            i = tree[i].right;
+            //printf("Vado a destra: %d\n", i);
+        }else if (tree[i].left == -1){
+            //printf("Elimino %d\n", tree[i].off);
+            tree[i].off = -1;
+            if (parentChild != NULL)
+                *parentChild = tree[i].right;
+            else{
+                *root = tree[i].right;
+                //printf("Root off: %d in %d\n", tree[*root].off, *root);
+            }
+            tree[i].right = -1;
+            tree[i].left = -1;
+            return;
+        }else if (tree[i].right == -1){
+            //printf("Elimino %d\n", tree[i].off);
+            tree[i].off = -1;
+            if (parentChild != NULL)
+                *parentChild = tree[i].left;
+            else{
+                *root = tree[i].left;
+                //printf("Root off: %d in %d\n", tree[*root].off, *root);
+            }
+            tree[i].right = -1;
+            tree[i].left = -1;
+            return;
         }else{
-            deleteMin(tree, *root, tree[*root].right, &(tree[*root].right));
+            //printf("Elimino %d\n", tree[i].off);
+            deleteMin(tree, i, tree[i].right, &(tree[i].right));
+            return;
         }
     }
 }

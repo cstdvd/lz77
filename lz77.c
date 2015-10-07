@@ -19,7 +19,7 @@
  *                                CONSTANTS
  ***************************************************************************/
 #define LA_SIZE 15      /* lookahead size */
-#define SB_SIZE 512    /* search buffer size */
+#define SB_SIZE 4094    /* search buffer size */
 #define N 2
 #define WINDOW_SIZE ((SB_SIZE + LA_SIZE) * N)
 
@@ -54,7 +54,7 @@ void decode(FILE *file, FILE *out);
 void writecode(struct token t, FILE *out);
 struct token readcode(FILE *file);
 
-struct token match(struct node *tree, unsigned char *window, int la, int la_size);
+struct token match(struct node *tree, int root, unsigned char *window, int la, int la_size);
 
 /***************************************************************************
  *                            USER INTERFACE
@@ -159,16 +159,16 @@ error:
 void encode(FILE *file, FILE *out)
 {
     /* variables */
-    int i, count = 0, root = 0;
+    int i, root = 0;
     int c;
-    struct node tree[SB_SIZE+1];
+    struct node tree[SB_SIZE];
     struct token t;
     unsigned char window[WINDOW_SIZE];
     int la_size, sb_size = 0;    /* actual lookahead and search buffer size */
     
     int sb_index = 0, la_index = 0;
     
-    initialize(tree, SB_SIZE+1);
+    initialize(tree, SB_SIZE);
     
     /* fill the lookahead with the first LA_SIZE bytes or until EOF is reached */
     for(la_size = 0; la_size < LA_SIZE; la_size++){
@@ -179,13 +179,11 @@ void encode(FILE *file, FILE *out)
     }
     
     /* find the longest match of the lookahead in the tree*/
-    t = match(tree, window, la_index, la_size);
+    t = match(tree, root, window, la_index, la_size);
     //printf("<%d, %d, %c>\n", t.off, t.len, t.next);
 
     /* write the token in the output file */
     writecode(t, out);
-    count++;
-    
     
     /* cycle from the 2nd iteration until the end */
 	while(la_size > 0){
@@ -193,7 +191,7 @@ void encode(FILE *file, FILE *out)
         /* scroll backward the buffer when it is almost full */
         if (la_index+la_size+t.len > WINDOW_SIZE-1){
             memcpy(window, &(window[sb_index]), sb_size+la_size);
-            updateOffset(tree, sb_index, SB_SIZE+1);
+            updateOffset(tree, sb_index, SB_SIZE);
             sb_index = 0;
             la_index = sb_size;
         }
@@ -204,46 +202,41 @@ void encode(FILE *file, FILE *out)
             if(c != EOF){
                 window[la_index+la_size] = c;
                 
-                /* insert a new node in the tree */
-                insert(tree, root, window, la_index, la_size, SB_SIZE);
-                la_index++;
-                
                 /* if search buffer's length is max, the oldest node is removed from the tree */
                 if(sb_size == SB_SIZE){
-                    root = 0;
                     delete(tree, &root, window, la_size, sb_index);
                     sb_index++;
                 }else
                     sb_size++;
-            }
-            else{
+                
+                /* insert a new node in the tree */
+                insert(tree, root, window, la_index, la_size, SB_SIZE);
+                la_index++;
+            }else{
                 /* case where we hit EOF before filling lookahead */
                 
-                /* insert a new node in the tree */
-                insert(tree, root, window, la_index, la_size, SB_SIZE);
-                la_index++;
-                
                 /* if search buffer's length is max, the oldest node is removed from the tree */
                 if(sb_size == SB_SIZE){
-                    root = 0;
                     delete(tree, &root, window, la_size, sb_index);
                     sb_index++;
                 }else
                     sb_size++;
+                
+                /* insert a new node in the tree */
+                insert(tree, root, window, la_index, la_size, SB_SIZE);
+                la_index++;
                 
                 la_size--;
             }
         }
         
         if(la_size > 0){
-            //free(t);
             /* find the longest match of the lookahead in the tree*/
-            t = match(tree, window, la_index, la_size);
+            t = match(tree, root, window, la_index, la_size);
             //printf("<%d, %d, %c>\n", t.off, t.len, t.next);
 
             /* write the token in the output file */
             writecode(t, out);
-            count++;
         }
 	}
 }
@@ -307,14 +300,14 @@ void decode(FILE *file, FILE *out)
  *                la_size - actual lookahead size
  * Returned     : token of the best match
  ***************************************************************************/
-struct token match(struct node *tree, unsigned char *window, int la, int la_size)
+struct token match(struct node *tree, int root, unsigned char *window, int la, int la_size)
 {
     /* variables */
     struct token t;
     int *ret;
     
     /* find the longest match */
-    ret = find(tree, window, la, la_size);
+    ret = find(tree, root, window, la, la_size);
     
     /* create the token */
     t.off = ret[0];
