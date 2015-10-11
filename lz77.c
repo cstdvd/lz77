@@ -122,6 +122,8 @@ void encode(FILE *file, FILE *out)
             la_size = (buff_size > LA_SIZE) ? LA_SIZE : buff_size;
         }
 	}
+    
+    free(window);
 }
 
 /***************************************************************************
