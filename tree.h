@@ -9,6 +9,8 @@
 #define tree_h
 /***************************************************************************
  *                            TYPE DEFINITIONS
+ * Nodes are composed by a sequence of bytes, length of the sequence,
+ * absolute offset of the sequence in the window and the node's children
  ***************************************************************************/
 struct node{
     int len, off;

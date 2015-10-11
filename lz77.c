@@ -71,13 +71,13 @@ void encode(FILE *file, FILE *out)
     
     eof = feof(file);
     
+    /* set lookahead's size */
     la_size = (buff_size > LA_SIZE) ? LA_SIZE : buff_size;
     
 	while(buff_size > 0){
 		
         /* find the longest match of the lookahead in the tree*/
         t = match(tree, root, window, la_index, la_size);
-        //printf("<%d, %d, %c>\n", t.off, t.len, t.next);
         
         /* write the token in the output file */
         writecode(t, out);
@@ -158,7 +158,6 @@ void decode(FILE *file, FILE *out)
             /* write the byte in the output file*/
             putc(buffer[back], out);
             
-            /* slide the circular array*/
             back++;
             t.len--;
         }
@@ -167,7 +166,6 @@ void decode(FILE *file, FILE *out)
         /* write the byte in the output file*/
         putc(buffer[back], out);
         
-        /* slide the circular array*/
         back++;
     }
     
@@ -177,7 +175,8 @@ void decode(FILE *file, FILE *out)
  *                            MATCH FUNCTION
  * Name         : match - find the longest match and create the token
  * Parameters   : tree - binary search tree
- *                window - whole buffer
+ *                root - index of the root
+ *                window - pointer to the buffer
  *                la - starting index of the lookahead
  *                la_size - actual lookahead size
  * Returned     : token of the best match
