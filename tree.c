@@ -68,50 +68,40 @@ void insert(struct node *tree, int *root, unsigned char *window, int abs_off, in
     /* no root: the new node becomes the root */
     if (*root == -1){
         *root = off;
-        tree[*root].off = abs_off;
-        tree[*root].len = len;
-        tree[*root].left = -1;
-        tree[*root].right = -1;
         tree[*root].parent = -1;
+    }else{
+        i = *root;
         
-        return;
-    }
-    
-    i = *root;
-    
-    while (1){
-        if (memcmp(&(window[abs_off]), &(window[tree[i].off]), len) < 0){
+        while (1){
             tmp = i;
-            /* go to the left child */
-            i = tree[i].left;
-            if (i == -1){
-                /* create the new node and insert it in the tree */
-                tree[off].off = abs_off;
-                tree[tmp].left = off;
-                tree[off].parent = tmp;
-                tree[off].len = len;
-                tree[off].left = -1;
-                tree[off].right = -1;
+            if (memcmp(&(window[abs_off]), &(window[tree[i].off]), len) < 0){
+                /* go to the left child */
+                i = tree[i].left;
+                if (i == -1){
+                    /* create the new node and insert it in the tree */
+                    tree[tmp].left = off;
+                    tree[off].parent = tmp;
+                    
+                    break;
+                }
+            }else{
+                /* go to the right child */
+                i = tree[i].right;
+                if (i == -1){
+                    /* create the new node and insert it in the tree */
+                    tree[tmp].right = off;
+                    tree[off].parent = tmp;
                 
-                break;
-            }
-        }else{
-            tmp = i;
-            /* go to the right child */
-            i = tree[i].right;
-            if (i == -1){
-                /* create the new node and insert it in the tree */
-                tree[off].off = abs_off;
-                tree[tmp].right = off;
-                tree[off].parent = tmp;
-                tree[off].len = len;
-                tree[off].left = -1;
-                tree[off].right = -1;
-                
-                break;
+                    break;
+                }
             }
         }
     }
+    
+    tree[off].off = abs_off;
+    tree[off].len = len;
+    tree[off].left = -1;
+    tree[off].right = -1;
 }
 
 /***************************************************************************
