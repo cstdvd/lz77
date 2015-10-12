@@ -9,8 +9,9 @@
 #define tree_h
 /***************************************************************************
  *                            TYPE DEFINITIONS
- * Nodes are composed by a sequence of bytes, length of the sequence,
- * absolute offset of the sequence in the window and the node's children
+ * Nodes are composed by the offset of the sequence in the buffer, length 
+ * of the sequence, index of its parent in the tree, indices of its children
+ * in the tree.
  ***************************************************************************/
 struct node{
     int len, off;
