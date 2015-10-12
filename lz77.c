@@ -53,14 +53,16 @@ void encode(FILE *file, FILE *out)
     /* variables */
     int i, root = -1;
     int eof;
-    struct node tree[SB_SIZE];
+    struct node *tree;
     struct token t;
     unsigned char *window;
-    int la_size, sb_size = 0, buff_size;    /* actual lookahead and search buffer size */
-    
+    int la_size, sb_size = 0;    /* actual lookahead and search buffer size */
+    int buff_size;
     int sb_index = 0, la_index = 0;
     
     window = calloc(WINDOW_SIZE, sizeof(unsigned char));
+    
+    tree = createTree(SB_SIZE);
     
     /* fill the lookahead with the first LA_SIZE bytes or until EOF is reached */
     buff_size = fread(window, 1, WINDOW_SIZE, file);
@@ -123,6 +125,7 @@ void encode(FILE *file, FILE *out)
         }
 	}
     
+    destroyTree(tree);
     free(window);
 }
 
@@ -137,7 +140,9 @@ void decode(FILE *file, FILE *out)
     /* variables */
     struct token t;
     int back = 0, off;
-    unsigned char buffer[WINDOW_SIZE];
+    unsigned char *buffer;
+    
+    buffer = (unsigned char*)calloc(WINDOW_SIZE, sizeof(unsigned char));
     
     while(feof(file) == 0)
     {

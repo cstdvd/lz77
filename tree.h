@@ -9,15 +9,8 @@
 #define tree_h
 /***************************************************************************
  *                            TYPE DEFINITIONS
- * Nodes are composed by the offset of the sequence in the buffer, length 
- * of the sequence, index of its parent in the tree, indices of its children
- * in the tree.
  ***************************************************************************/
-struct node{
-    int len, off;
-    int parent;
-    int left, right;
-};
+struct node;
 
 struct ret{
     int off, len;
@@ -26,7 +19,8 @@ struct ret{
 /***************************************************************************
  *                         FUNCTIONS DECLARATION
  ***************************************************************************/
-void initialize(struct node *tree, int max);
+struct node *createTree(int size);
+void destroyTree(struct node *tree);
 void insert(struct node *tree, int *root, unsigned char *window, int off, int len, int max);
 struct ret find(struct node *tree, int root, unsigned char *window, int index, int size);
 void delete(struct node *tree, int *root, unsigned char *window, int abs_sb, int max);

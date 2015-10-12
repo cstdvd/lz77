@@ -15,6 +15,41 @@
 #include "tree.h"
 
 /***************************************************************************
+ *                            TYPE DEFINITIONS
+ * Nodes are composed by the offset of the sequence in the buffer, length
+ * of the sequence, index of its parent in the tree, indices of its children
+ * in the tree.
+ ***************************************************************************/
+struct node{
+    int len, off;
+    int parent;
+    int left, right;
+};
+
+/***************************************************************************
+ *                          CREATE TREE FUNCTION
+ * Name         : createTree - memory allocation for the tree array
+ * Parameters   : size - maximum number of nodes in the tree
+ * Returned     : pointer to the tree array
+ ***************************************************************************/
+struct node *createTree(int size)
+{
+    struct node *tree = calloc(size, sizeof(struct node));
+    
+    return tree;
+}
+
+/***************************************************************************
+ *                        DESTROY TREE FUNCTION
+ * Name         : destroyTree - memory deallocation of the tree array
+ * Parameters   : tree - pointer to the tree array
+ ***************************************************************************/
+void destroyTree(struct node *tree)
+{
+    free(tree);
+}
+
+/***************************************************************************
  *                            INSERT FUNCTION
  * Name         : insert - insert a node in the tree
  * Parameters   : tree - pointer to the binary tree array
