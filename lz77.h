@@ -11,6 +11,6 @@
  ***************************************************************************/
 #ifndef lz77_h
 #define lz77_h
-void encode(FILE *file, FILE *out);
-void decode(FILE *file, FILE *out);
+void encode(FILE *file, struct bitFILE *out);
+void decode(struct bitFILE *file, FILE *out);
 #endif

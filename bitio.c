@@ -34,6 +34,7 @@ struct bitFILE{
 	int mode; // specify the mode (READ or WRITE)
 	int bytepos; // store the actual byte's position in the buffer
 	int bitpos; // store the last bit's position in the byte
+    int read;
 	unsigned char *buffer; // bits buffer
 };
 
@@ -67,7 +68,9 @@ int bitof(int n){
  */
 int bitIO_feof(struct bitFILE *bitF)
 {
-	return feof(bitF->file);
+    if (feof(bitF->file) && bitF->bytepos == bitF->read)
+        return 1;
+    return 0;
 }
 
 
@@ -111,12 +114,10 @@ void write_buffer(struct bitFILE *bitF){
  */
 void read_buffer(struct bitFILE *bitF){
 
-	int ret;
-
 	// read data
-	ret = fread(bitF->buffer, 1, BIT_IO_BUFFER, bitF->file);
+	bitF->read = fread(bitF->buffer, 1, BIT_IO_BUFFER, bitF->file);
 	// check for errors
-	if(ret < BIT_IO_BUFFER && ferror(bitF->file))
+	if(bitF->read < BIT_IO_BUFFER && ferror(bitF->file))
 	{
 		 perror("Error reading file.\n");
 		 exit(EXIT_FAILURE);
@@ -146,13 +147,10 @@ struct bitFILE* bitIO_open(const char *path, int mode){
 	if(mode!=BIT_IO_W && mode!=BIT_IO_R)
 	{
 		printf("Invalid mode detected.\n");
-		exit(1);
+		return NULL;
 	}
 	if(path == NULL)
-	{
-		printf("Invalid path.\n");
-		exit(1);
-	}
+		return NULL;
 
 	// initialize structure
 	bitF = (struct bitFILE*)calloc(1, sizeof(struct bitFILE));
@@ -167,19 +165,14 @@ struct bitFILE* bitIO_open(const char *path, int mode){
 	if(bitF->mode == BIT_IO_R)
 	{
 		if((bitF->file = fopen(path, "rb")) == NULL)
-		{
-			perror("Opening file to read");
-			exit(EXIT_FAILURE);
-		}
+			return NULL;
+            
 		// fill the buffer for the 1st time
 		read_buffer(bitF);
 	}
 		// write mode
 	else if((bitF->file = fopen(path, "w")) == NULL)
-	{
-		perror("Opening file to write");
-		exit(EXIT_FAILURE);
-	}
+		return NULL;
 
 	return bitF;
 }

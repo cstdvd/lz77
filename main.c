@@ -23,7 +23,9 @@
  ***************************************************************************/
 #include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
 #include "getopt.h"
+#include "bitio.h"
 #include "lz77.h"
 
 /***************************************************************************
@@ -47,11 +49,13 @@ int main(int argc, char *argv[])
 {
     /* variables */
     int opt;
-    FILE *file = NULL, *out = NULL;
+    FILE *file = NULL;
+    struct bitFILE *bitF = NULL;
     MODES mode;
+    char *filenameIn = NULL, *filenameOut = NULL;
     
     /* default mode */
-    mode = ENCODE;
+    mode = -1;
     
     while ((opt = getopt(argc, argv, "cdi:o:h")) != -1)
     {
@@ -66,22 +70,22 @@ int main(int argc, char *argv[])
                 break;
                 
             case 'i':       /* input file name */
-                if (file != NULL){
+                if (filenameIn != NULL){
                     fprintf(stderr, "Multiple input files not allowed.\n");
                     goto error;
-                }else if ((file = fopen(optarg, "rb")) == NULL){
-                    perror("Opening input file");
-                    goto error;
+                }else{
+                    filenameIn = malloc(strlen(optarg) + 1);
+                    strcpy(filenameIn, optarg);
                 }
                 break;
                 
             case 'o':       /* output file name */
-                if (out != NULL){
+                if (filenameOut != NULL){
                     fprintf(stderr, "Multiple output files not allowed.\n");
                     goto error;
-                }else if ((out = fopen(optarg, "w")) == NULL){
-                    perror("Opening output file");
-                    goto error;
+                }else{
+                    filenameOut = malloc(strlen(optarg) + 1);
+                    strcpy(filenameOut, optarg);
                 }
                 break;
                 
@@ -98,23 +102,44 @@ int main(int argc, char *argv[])
     }
     
     /* validate command line */
-    if (file == NULL){
+    if (filenameIn == NULL){
         fprintf(stderr, "Input file must be provided\n");
         goto error;
-    }else if (out == NULL)
+    }else if (filenameOut == NULL)
     {
         fprintf(stderr, "Output file must be provided\n");
         goto error;
     }
     
     if (mode == ENCODE){
-        encode(file, out);
+        if ((file = fopen(filenameIn, "rb")) == NULL){
+            perror("Opening input file");
+            goto error;
+        }
+        if ((bitF = bitIO_open(filenameOut, BIT_IO_W)) == NULL) {
+            perror("Opening output file");
+            goto error;
+        }
+        encode(file, bitF);
+            
+    }else if (mode == DECODE){
+        if ((bitF = bitIO_open(filenameIn, BIT_IO_R)) == NULL) {
+            perror("Opening input file");
+            goto error;
+        }
+        if ((file = fopen(filenameOut, "w")) == NULL){
+            perror("Opening output file");
+            goto error;
+        }
+        decode(bitF, file);
+            
     }else{
-        decode(file, out);
+        fprintf(stderr, "Select ENCODE or DECODE mode\n");
+        goto error;
     }
     
     fclose(file);
-    fclose(out);
+    bitIO_close(bitF);
     return 0;
     
     /* handle error */
@@ -122,8 +147,8 @@ error:
     if (file != NULL){
         fclose(file);
     }
-    if (out != NULL){
-        fclose(out);
+    if (bitF != NULL){
+        bitIO_close(bitF);
     }
     exit (EXIT_FAILURE);
 }

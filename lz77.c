@@ -12,15 +12,17 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include "bitio.h"
 #include "tree.h"
 
 /***************************************************************************
  *                                CONSTANTS
  ***************************************************************************/
-#define LA_SIZE 15      /* lookahead size */
-#define SB_SIZE 4095    /* search buffer size */
+#define DEFAULT_LA_SIZE 15      /* lookahead size */
+#define DEFAULT_SB_SIZE 4095    /* search buffer size */
 #define N 3
-#define WINDOW_SIZE ((SB_SIZE * N) + LA_SIZE)
+#define WINDOW_SIZE ((DEFAULT_SB_SIZE * N) + DEFAULT_LA_SIZE)
+#define MAX_BIT_BUFFER 16
 
 /***************************************************************************
  *                            TYPE DEFINITIONS
@@ -37,8 +39,8 @@ struct token{
 /***************************************************************************
  *                         FUNCTIONS DECLARATION
  ***************************************************************************/
-void writecode(struct token t, FILE *out);
-struct token readcode(FILE *file);
+void writecode(struct token t, struct bitFILE *out);
+struct token readcode(struct bitFILE *file);
 
 struct token match(struct node *tree, int root, unsigned char *window, int la, int la_size);
 
@@ -48,7 +50,7 @@ struct token match(struct node *tree, int root, unsigned char *window, int la, i
  * Parameters   : file - file to encode
  *                out - compressed file
  ***************************************************************************/
-void encode(FILE *file, FILE *out)
+void encode(FILE *file, struct bitFILE *out)
 {
     /* variables */
     int i, root = -1;
@@ -59,10 +61,15 @@ void encode(FILE *file, FILE *out)
     int la_size, sb_size = 0;    /* actual lookahead and search buffer size */
     int buff_size;
     int sb_index = 0, la_index = 0;
+    int LA_SIZE = DEFAULT_LA_SIZE, SB_SIZE = DEFAULT_SB_SIZE;
     
     window = calloc(WINDOW_SIZE, sizeof(unsigned char));
     
     tree = createTree(SB_SIZE);
+    
+    /* write header */
+    /*bitIO_write(out, &SB_SIZE, MAX_BIT_BUFFER);
+    bitIO_write(out, &LA_SIZE, MAX_BIT_BUFFER);*/
     
     /* fill the lookahead with the first LA_SIZE bytes or until EOF is reached */
     buff_size = fread(window, 1, WINDOW_SIZE, file);
@@ -135,21 +142,24 @@ void encode(FILE *file, FILE *out)
  * Parameters   : file - compressed file
  *                out - output file
  ***************************************************************************/
-void decode(FILE *file, FILE *out)
+void decode(struct bitFILE *file, FILE *out)
 {
     /* variables */
     struct token t;
     int back = 0, off;
     unsigned char *buffer;
+    int SB_SIZE = DEFAULT_SB_SIZE;
     
     buffer = (unsigned char*)calloc(WINDOW_SIZE, sizeof(unsigned char));
     
-    while(feof(file) == 0)
+    /* read header */
+    /*bitIO_read(file, &SB_SIZE, sizeof(SB_SIZE), MAX_BIT_BUFFER);
+    bitIO_read(file, &LA_SIZE, sizeof(LA_SIZE), MAX_BIT_BUFFER);*/
+    
+    while(bitIO_feof(file) == 0)
     {
         /* read the code from the input file */
         t = readcode(file);
-        if(t.off == -1)
-            break;
         
         if(back + t.len > WINDOW_SIZE - 1){
             memcpy(buffer, &(buffer[back - SB_SIZE]), SB_SIZE);
@@ -220,21 +230,11 @@ struct token match(struct node *tree, int root, unsigned char *window, int la, i
  *    |         offset        |lenght |   next char   |
  *    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
  ***************************************************************************/
-void writecode(struct token t, FILE *out)
+void writecode(struct token t, struct bitFILE *out)
 {
-    /* variables */
-    unsigned char code[3];
-    int i;
-    
-    /* use masks to selectivly set the bits */
-    code[0] = (unsigned char)t.off;
-    code[1] = (unsigned char)((t.off >> 8) & 0x0f);
-    code[1] = code[1] | (unsigned char)((t.len << 4) & 0xf0);
-    code[2] = t.next;
-    
-    /* write the code in the output file */
-    for(i = 0; i < 3; i++)
-        putc(code[i], out);
+    bitIO_write(out, &t.off, bitof(DEFAULT_SB_SIZE));
+    bitIO_write(out, &t.len, bitof(DEFAULT_LA_SIZE));
+    bitIO_write(out, &t.next, 8);
 }
 
 /***************************************************************************
@@ -243,28 +243,14 @@ void writecode(struct token t, FILE *out)
  * Parameters   : file - compressed file
  * Returned     : t - reconstructed token
  ***************************************************************************/
-struct token readcode(FILE *file)
+struct token readcode(struct bitFILE *file)
 {
     /* variables */
     struct token t;
-    unsigned char code[3];
-    int ret;
     
-    /* read code from file */
-    ret = (int)fread(code, 1, 3, file);
-    if(feof(file) == 1){
-        t.off = -1;
-        return t;
-    }
-    if(ret < 3){
-        perror("Error reading file.");
-        exit(1);
-    }
-    
-    /* use masks to selectivly set the bits */
-    t.off = (((int)code[1] & 0x0000000f) << 8) | (int)code[0];
-    t.len = ((int)code[1] & 0x000000f0) >> 4;
-    t.next = code[2];
+    bitIO_read(file, &t.off, sizeof(t.off), bitof(DEFAULT_SB_SIZE));
+    bitIO_read(file, &t.len, sizeof(t.len), bitof(DEFAULT_LA_SIZE));
+    bitIO_read(file, &t.next, sizeof(t.next), 8);
     
     return t;
 }
