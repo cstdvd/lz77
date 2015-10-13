@@ -118,7 +118,7 @@ void insert(struct node *tree, int *root, unsigned char *window, int abs_off, in
 struct ret find(struct node *tree, int root, unsigned char *window, int index, int size)
 {
     /* variables */
-    int i, j, ret;
+    int i, j;
     struct ret off_len;
     
     /* initialize as non-match values */
@@ -133,7 +133,7 @@ struct ret find(struct node *tree, int root, unsigned char *window, int index, i
     while (1){
         
         /* look for how many characters are equal between the lookahead and the node */
-        for (i = 0; (ret = memcmp(&(window[index+i]), &(window[tree[j].off + i]), 1)) == 0 && i < size-1; i++){}
+        for (i = 0; window[index+i] == window[tree[j].off + i] && i < size-1; i++){}
         
         /* if the new match is better than the previous one, save the values */
         if (i > off_len.len){
@@ -141,9 +141,9 @@ struct ret find(struct node *tree, int root, unsigned char *window, int index, i
             off_len.len = i;
         }
         
-        if (ret < 0 && tree[j].left != -1)
+        if (window[index+i] < window[tree[j].off + i] && tree[j].left != -1)
             j = tree[j].left;
-        else if (ret > 0 && tree[j].right != -1)
+        else if (window[index+i] > window[tree[j].off + i] && tree[j].right != -1)
             j = tree[j].right;
         else break;
     }
