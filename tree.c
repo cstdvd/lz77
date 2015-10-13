@@ -78,7 +78,7 @@ void insert(struct node *tree, int *root, unsigned char *window, int abs_off, in
                 /* go to the left child */
                 i = tree[i].left;
                 if (i == -1){
-                    /* create the new node and insert it in the tree */
+                    /* set parent-child relation */
                     tree[tmp].left = off;
                     tree[off].parent = tmp;
                     
@@ -88,7 +88,7 @@ void insert(struct node *tree, int *root, unsigned char *window, int abs_off, in
                 /* go to the right child */
                 i = tree[i].right;
                 if (i == -1){
-                    /* create the new node and insert it in the tree */
+                    /* set parent-child relation */
                     tree[tmp].right = off;
                     tree[off].parent = tmp;
                 
@@ -98,6 +98,7 @@ void insert(struct node *tree, int *root, unsigned char *window, int abs_off, in
         }
     }
     
+    /* set other parameters */
     tree[off].off = abs_off;
     tree[off].len = len;
     tree[off].left = -1;
@@ -129,7 +130,7 @@ struct ret find(struct node *tree, int root, unsigned char *window, int index, i
     j = root;
     
     /* flow the tree finding the longest match node */
-    while (tree[j].off != -1){
+    while (1){
         
         /* look for how many characters are equal between the lookahead and the node */
         for (i = 0; (ret = memcmp(&(window[index+i]), &(window[tree[j].off + i]), 1)) == 0 && i < size-1; i++){}
@@ -191,72 +192,53 @@ void delete(struct node *tree, int *root, unsigned char *window, int abs_sb, int
         if (child != -1)
             tree[child].parent = tree[sb].parent;
         parent = tree[sb].parent;
-        if (parent != -1){
-            if (tree[parent].right == sb){
-                tree[parent].right = child;
-            }else{
-                tree[parent].left = child;
-            }
-        }else
-            *root = child;
+
     }else if (tree[sb].right == -1){
-        /* the node to be deleted has not the left child */
+        /* the node to be deleted has not the right child */
         child = tree[sb].left;
         tree[child].parent = tree[sb].parent;
         parent = tree[sb].parent;
-        if (parent != -1){
-            if (tree[parent].right == sb){
-                tree[parent].right = child;
-            }else{
-                tree[parent].left = child;
-            }
-        }else
-            *root = child;
+        
     }else{
-        /* the node to be deleted has both the children: it will be substitute
+        /* the node to be deleted has both the children: it will be replaced
            by the minimum child of its right subtree */
         child = minChild(tree, tree[sb].right);
         
         if (tree[child].parent == sb){
+            /* just the left child has to be updated */
             parent = tree[sb].parent;
             tree[child].parent = parent;
-            tree[child].left = tree[sb].left;
-            if (tree[child].left != -1)
-                tree[tree[child].left].parent = child;
-            if (parent != -1){
-                if (tree[parent].right == sb){
-                    tree[parent].right = child;
-                }else{
-                    tree[parent].left = child;
-                }
-            }else
-                *root = child;
+            
         }else{
+            /* also the right child has to be updated */
             parent = tree[child].parent;
             tree[parent].left = tree[child].right;
             if(tree[child].right != -1)
                 tree[tree[child].right].parent = parent;
         
-            tree[child].left = tree[sb].left;
             tree[child].right = tree[sb].right;
             tree[child].parent = tree[sb].parent;
         
-            if (tree[child].left != -1)
-                tree[tree[child].left].parent = child;
             if (tree[child].right != -1)
                 tree[tree[child].right].parent = child;
         
             parent = tree[child].parent;
-            if (parent != -1){
-                if (tree[parent].right == sb){
-                    tree[parent].right = child;
-                }else{
-                    tree[parent].left = child;
-                }
-            }else
-                *root = child;
         }
+        
+        tree[child].left = tree[sb].left;
+        if (tree[child].left != -1)
+            tree[tree[child].left].parent = child;
     }
+    
+    /* set the parent's child or the child as the root */
+    if (parent != -1){
+        if (tree[parent].right == sb){
+            tree[parent].right = child;
+        }else{
+            tree[parent].left = child;
+        }
+    }else
+        *root = child;
     
 }
 
