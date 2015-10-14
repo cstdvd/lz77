@@ -21,6 +21,7 @@
 #define DEFAULT_LA_SIZE 15      /* lookahead size */
 #define DEFAULT_SB_SIZE 4095    /* search buffer size */
 #define N 3
+#define DEFAULT_WINDOW_SIZE ((DEFAULT_SB_SIZE * N) + DEFAULT_LA_SIZE)
 #define MAX_BIT_BUFFER 16
 
 /***************************************************************************
@@ -166,8 +167,8 @@ void decode(struct bitFILE *file, FILE *out)
         /* read the code from the input file */
         t = readcode(file, LA_SIZE, SB_SIZE);
 
-        if(t.off == -1)
-            break;
+			if(t.off == -1)
+				break;
         
         if(back + t.len > WINDOW_SIZE - 1){
             memcpy(buffer, &(buffer[back - SB_SIZE]), SB_SIZE);
@@ -228,27 +229,40 @@ struct token match(struct node *tree, int root, unsigned char *window, int la, i
  * Name         : writecode - write the token in the output file
  * Parameters   : t - token to be written
  *                out - output file
- * SB_SIZE = n  =>  ceil(log(n)/log(2)) bits for Offset representation
- * LA_SIZE = m  =>  ceil(log(m)/log(2)) bits for Length representation
- * Alway 8 bits for Next char representation
  *
- * DEFAULT (LA_SIZE = 15, SB_SIZE = 4095):
- * Offset : 12 bits representation => [0, 4095]
- * Length : 4 bits representation => [0, 15]
- * Next char requires 8 bits
- * Total token's size: 12 + 4 + 8 = 24 bits = 3 bytes
+ *		There are 2 cases:
+ *		1)	The offset and the length are both equal to zero, so the token is
+ *			something like <0, 0, x> where 'x' is a char on 8 bits.
+ *			In this case we're going to write only the 'next char' field of
+ *			the 'token' structure. 'f' is a flag to distinguish the two
+ *			different cases, and is set euqual to 0.
  *
- *     0 1 2 3 4 5 6 7 0 1 2 3 4 5 6 7 0 1 2 3 4 5 6 7
- *    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
- *    |         offset        |lenght |   next char   |
- *    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *		0 1 2 3 4 5 6 7 0
+ *   +-+-+-+-+-+-+-+-+-+
+ *   |f|   next char   |						f = 0 
+ *   +-+-+-+-+-+-+-+-+-+
+ * 
+ *
+ *		2) The offset are both non-zero, the token looks like <off, len, x>
+ *			where 'off' and 'len' are two integer greater than 0 and 'x' is
+ *			a char on 8 bits. In this case 'f' is set equal to 1.
+ *
+ *     0 					   o	   l			   e 	f = 1
+ *    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+	o = bitof(offset)
+ *    |f|         offset        |lenght |   next char   |	l = o + bitof(length)
+ *    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+	e = l + 7
  ***************************************************************************/
 void writecode(struct token t, struct bitFILE *out, int la_size, int sb_size)
 {
+	/* variables */   
+	int flag = (t.off == 0)? 0 : 1;
 
-    bitIO_write(out, &t.off, bitof(sb_size));
-    bitIO_write(out, &t.len, bitof(la_size));
-    bitIO_write(out, &t.next, 8);
+	bitIO_write(out, &flag, 1);
+	if(flag == 1){
+		bitIO_write(out, &t.off, bitof(sb_size));
+		bitIO_write(out, &t.len, bitof(la_size));
+	}
+	bitIO_write(out, &t.next, 8);
 }
 
 /***************************************************************************
@@ -261,17 +275,22 @@ struct token readcode(struct bitFILE *file, int la_size, int sb_size)
 {
 	/* variables */
 	struct token t;
-	int ret = 0;
-
-	ret += bitIO_read(file, &t.off, sizeof(t.off), bitof(sb_size));
-	ret += bitIO_read(file, &t.len, sizeof(t.len), bitof(la_size));
-	ret += bitIO_read(file, &t.next, sizeof(t.next), 8);
+	int flag, ret = 0;
+    
+	memset(&t, 0, sizeof(t));	
+	/* read the flag */
+	ret += bitIO_read(file, &flag, sizeof(int), 1);
+	
+	if(flag == 1){
+		ret += bitIO_read(file, &t.off, sizeof(int), bitof(sb_size));
+		ret += bitIO_read(file, &t.len, sizeof(int), bitof(la_size));
+	}
+	ret += bitIO_read(file, &t.next, sizeof(unsigned char), 8);
 		
 	/* check for EOF or ERR */	
-	if(ret < (bitof(sb_size) + bitof(la_size) + 8)){
+	if(ret < 9){
 		/* ERR */		
-		if(bitIO_ferror(file) != 0)
-		{
+		if(bitIO_ferror(file) != 0){
 			perror("Error reading bits.\n");
 			exit(EXIT_FAILURE);
 		}
