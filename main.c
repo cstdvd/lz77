@@ -5,6 +5,7 @@
  *   Authors : David Costa and Pietro De Rosa
  *
  *                              DESCRIPTION
+ *
  *   LZ77 is a lossless data compression algorithms published by Abraham 
  *   Lempel and Jacob Ziv in 1977. It is a dictionary coder and maintains a
  *   sliding window during compression. The sliding window is divided in two
