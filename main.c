@@ -30,6 +30,14 @@
 #include "lz77.h"
 
 /***************************************************************************
+ *                                CONSTANTS
+ ***************************************************************************/
+#define MIN_LA_SIZE 2       /* min lookahead size */
+#define MAX_LA_SIZE 255     /* max lookahead size */
+#define MIN_SB_SIZE 0       /* min search buffer size */
+#define MAX_SB_SIZE 65535   /* max search buffer size */
+
+/***************************************************************************
  *                            TYPE DEFINITIONS
  ***************************************************************************/
 typedef enum{
@@ -44,6 +52,8 @@ typedef enum{
  *          -d: decompression mode
  *          -i <filename>: input file
  *          -o <filename>: output file
+ *          -l <value> : lookahead size (default 15)
+ *          -s <value> : search-buffer size (default 4095)
  *          -h: help
  ***************************************************************************/
 int main(int argc, char *argv[])
@@ -54,11 +64,12 @@ int main(int argc, char *argv[])
     struct bitFILE *bitF = NULL;
     MODES mode;
     char *filenameIn = NULL, *filenameOut = NULL;
+    int la_size = -1, sb_size = -1; /* default size */
     
     /* default mode */
     mode = -1;
     
-    while ((opt = getopt(argc, argv, "cdi:o:h")) != -1)
+    while ((opt = getopt(argc, argv, "cdi:o:l:s:h")) != -1)
     {
         switch(opt)
         {
@@ -74,19 +85,35 @@ int main(int argc, char *argv[])
                 if (filenameIn != NULL){
                     fprintf(stderr, "Multiple input files not allowed.\n");
                     goto error;
-                }else{
-                    filenameIn = malloc(strlen(optarg) + 1);
-                    strcpy(filenameIn, optarg);
                 }
+                filenameIn = malloc(strlen(optarg) + 1);
+                strcpy(filenameIn, optarg);
+                
                 break;
                 
             case 'o':       /* output file name */
                 if (filenameOut != NULL){
                     fprintf(stderr, "Multiple output files not allowed.\n");
                     goto error;
-                }else{
-                    filenameOut = malloc(strlen(optarg) + 1);
-                    strcpy(filenameOut, optarg);
+                }
+                filenameOut = malloc(strlen(optarg) + 1);
+                strcpy(filenameOut, optarg);
+                
+                break;
+                
+            case 'l':       /* lookahead size */
+                la_size = atoi(optarg);
+                if (la_size < MIN_LA_SIZE || la_size > MAX_LA_SIZE){
+                    fprintf(stderr, "Bad lookahead size value.\n");
+                    goto error;
+                }
+                break;
+                
+            case 's':       /* search-buffer size */
+                sb_size = atoi(optarg);
+                if (sb_size < MIN_SB_SIZE || sb_size > MAX_SB_SIZE){
+                    fprintf(stderr, "Bad search-buffer size value.\n");
+                    goto error;
                 }
                 break;
                 
@@ -96,6 +123,8 @@ int main(int argc, char *argv[])
                 printf("  -d : Decode input file to output file.\n");
                 printf("  -i <filename> : Name of input file.\n");
                 printf("  -o <filename> : Name of output file.\n");
+                printf("  -l <value> : Lookahead size (default 15)\n");
+                printf("  -s <value> : Search-buffer size (default 4095)\n");
                 printf("  -h : Command line options.\n\n");
                 break;
                 
@@ -121,7 +150,7 @@ int main(int argc, char *argv[])
             perror("Opening output file");
             goto error;
         }
-        encode(file, bitF);
+        encode(file, bitF, la_size, sb_size);
             
     }else if (mode == DECODE){
         if ((bitF = bitIO_open(filenameIn, BIT_IO_R)) == NULL) {

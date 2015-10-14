@@ -21,7 +21,7 @@
 #define DEFAULT_LA_SIZE 15      /* lookahead size */
 #define DEFAULT_SB_SIZE 4095    /* search buffer size */
 #define N 3
-#define WINDOW_SIZE ((DEFAULT_SB_SIZE * N) + DEFAULT_LA_SIZE)
+#define DEFAULT_WINDOW_SIZE ((DEFAULT_SB_SIZE * N) + DEFAULT_LA_SIZE)
 #define MAX_BIT_BUFFER 16
 
 /***************************************************************************
@@ -38,8 +38,8 @@ struct token{
 /***************************************************************************
  *                         FUNCTIONS DECLARATION
  ***************************************************************************/
-void writecode(struct token t, struct bitFILE *out);
-struct token readcode(struct bitFILE *file);
+void writecode(struct token t, struct bitFILE *out, int la_size, int sb_size);
+struct token readcode(struct bitFILE *file, int la_size, int sb_size);
 
 struct token match(struct node *tree, int root, unsigned char *window, int la, int la_size);
 
@@ -49,7 +49,7 @@ struct token match(struct node *tree, int root, unsigned char *window, int la, i
  * Parameters   : file - file to encode
  *                out - compressed file
  ***************************************************************************/
-void encode(FILE *file, struct bitFILE *out)
+void encode(FILE *file, struct bitFILE *out, int la, int sb)
 {
     /* variables */
     int i, root = -1;
@@ -60,15 +60,20 @@ void encode(FILE *file, struct bitFILE *out)
     int la_size, sb_size = 0;    /* actual lookahead and search buffer size */
     int buff_size;
     int sb_index = 0, la_index = 0;
-    int LA_SIZE = DEFAULT_LA_SIZE, SB_SIZE = DEFAULT_SB_SIZE;
+    int LA_SIZE, SB_SIZE, WINDOW_SIZE;
+    
+    /* set window parameters */
+    LA_SIZE = (la == -1) ? DEFAULT_LA_SIZE : la;
+    SB_SIZE = (sb == -1) ? DEFAULT_SB_SIZE : sb;
+    WINDOW_SIZE = (SB_SIZE * N) + LA_SIZE;
     
     window = calloc(WINDOW_SIZE, sizeof(unsigned char));
     
     tree = createTree(SB_SIZE);
     
     /* write header */
-    /*bitIO_write(out, &SB_SIZE, MAX_BIT_BUFFER);
-    bitIO_write(out, &LA_SIZE, MAX_BIT_BUFFER);*/
+    bitIO_write(out, &SB_SIZE, MAX_BIT_BUFFER);
+    bitIO_write(out, &LA_SIZE, MAX_BIT_BUFFER);
     
     /* fill the lookahead with the first LA_SIZE bytes or until EOF is reached */
     buff_size = fread(window, 1, WINDOW_SIZE, file);
@@ -88,7 +93,7 @@ void encode(FILE *file, struct bitFILE *out)
         t = match(tree, root, window, la_index, la_size);
         
         /* write the token in the output file */
-        writecode(t, out);
+        writecode(t, out, LA_SIZE, SB_SIZE);
         
         /* read as many bytes as matched in the previuos iteration */
         for(i = 0; i < t.len + 1; i++){
@@ -147,18 +152,20 @@ void decode(struct bitFILE *file, FILE *out)
     struct token t;
     int back = 0, off;
     unsigned char *buffer;
-    int SB_SIZE = DEFAULT_SB_SIZE;
-    
-    buffer = (unsigned char*)calloc(WINDOW_SIZE, sizeof(unsigned char));
+    int SB_SIZE, LA_SIZE, WINDOW_SIZE;
     
     /* read header */
-    /*bitIO_read(file, &SB_SIZE, sizeof(SB_SIZE), MAX_BIT_BUFFER);
-    bitIO_read(file, &LA_SIZE, sizeof(LA_SIZE), MAX_BIT_BUFFER);*/
+    bitIO_read(file, &SB_SIZE, sizeof(SB_SIZE), MAX_BIT_BUFFER);
+    bitIO_read(file, &LA_SIZE, sizeof(LA_SIZE), MAX_BIT_BUFFER);
+    
+    WINDOW_SIZE = (SB_SIZE * N) + LA_SIZE;
+    
+    buffer = (unsigned char*)calloc(WINDOW_SIZE, sizeof(unsigned char));
     
     while(bitIO_feof(file) == 0)
     {
         /* read the code from the input file */
-        t = readcode(file);
+        t = readcode(file, LA_SIZE, SB_SIZE);
         
         if(back + t.len > WINDOW_SIZE - 1){
             memcpy(buffer, &(buffer[back - SB_SIZE]), SB_SIZE);
@@ -229,10 +236,11 @@ struct token match(struct node *tree, int root, unsigned char *window, int la, i
  *    |         offset        |lenght |   next char   |
  *    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
  ***************************************************************************/
-void writecode(struct token t, struct bitFILE *out)
+void writecode(struct token t, struct bitFILE *out, int la_size, int sb_size)
 {
-    bitIO_write(out, &t.off, bitof(DEFAULT_SB_SIZE));
-    bitIO_write(out, &t.len, bitof(DEFAULT_LA_SIZE));
+    printf("la %d, sb %d, bitof la %d, bitof sb %d\n", la_size, sb_size, bitof(la_size), bitof(sb_size));
+    bitIO_write(out, &t.off, bitof(sb_size));
+    bitIO_write(out, &t.len, bitof(la_size));
     bitIO_write(out, &t.next, 8);
 }
 
@@ -242,13 +250,13 @@ void writecode(struct token t, struct bitFILE *out)
  * Parameters   : file - compressed file
  * Returned     : t - reconstructed token
  ***************************************************************************/
-struct token readcode(struct bitFILE *file)
+struct token readcode(struct bitFILE *file, int la_size, int sb_size)
 {
     /* variables */
     struct token t;
-    
-    bitIO_read(file, &t.off, sizeof(t.off), bitof(DEFAULT_SB_SIZE));
-    bitIO_read(file, &t.len, sizeof(t.len), bitof(DEFAULT_LA_SIZE));
+    printf("la %d, sb %d, bitof la %d, bitof sb %d\n", la_size, sb_size, bitof(la_size), bitof(sb_size));
+    bitIO_read(file, &t.off, sizeof(t.off), bitof(sb_size));
+    bitIO_read(file, &t.len, sizeof(t.len), bitof(la_size));
     bitIO_read(file, &t.next, sizeof(t.next), 8);
     
     return t;
