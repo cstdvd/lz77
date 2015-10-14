@@ -240,13 +240,13 @@ int bitIO_write(struct bitFILE *bitF, void *info, int nbit){
 
 /***************************************************************************
  *								BIT I/O READ FUNCTION
- * 	Name        :	bitIO_read - reads the first 'nbit' from the bitFILE and 
- *                	puts them in the buffer.
- *							If an error occurs, or the end of the file is
- *      					reached, the return value is a short item count (or zero).
- *							bitIO_read() does not distinguish between end-of-file and 
- *							error, and callers must use 'bitIO_feof' and 'bitIO_ferror'
- *							to determine which occurred.
+ * 	Name        : bitIO_read - reads the first 'nbit' from the bitFILE and
+ *                puts them in the buffer.
+ *				  If an error occurs, or the end of the file is
+ *      		  reached, the return value is a short item count (or zero).
+ *			  	  bitIO_read() does not distinguish between end-of-file and
+ *				  error, and callers must use 'bitIO_feof' and 'bitIO_ferror'
+ *				  to determine which occurred.
  * 	Parameters  : bitF - bitFILE opened in read mode
  * 				  info - buffer where read bits are put
  * 				  info_s - size of the 'info' buffer in bytes

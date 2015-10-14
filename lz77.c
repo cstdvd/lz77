@@ -21,7 +21,6 @@
 #define DEFAULT_LA_SIZE 15      /* lookahead size */
 #define DEFAULT_SB_SIZE 4095    /* search buffer size */
 #define N 3
-#define DEFAULT_WINDOW_SIZE ((DEFAULT_SB_SIZE * N) + DEFAULT_LA_SIZE)
 #define MAX_BIT_BUFFER 16
 
 /***************************************************************************
@@ -167,8 +166,8 @@ void decode(struct bitFILE *file, FILE *out)
         /* read the code from the input file */
         t = readcode(file, LA_SIZE, SB_SIZE);
 
-			if(t.off == -1)
-				break;
+        if(t.off == -1)
+            break;
         
         if(back + t.len > WINDOW_SIZE - 1){
             memcpy(buffer, &(buffer[back - SB_SIZE]), SB_SIZE);
@@ -229,11 +228,16 @@ struct token match(struct node *tree, int root, unsigned char *window, int la, i
  * Name         : writecode - write the token in the output file
  * Parameters   : t - token to be written
  *                out - output file
+ * SB_SIZE = n  =>  ceil(log(n)/log(2)) bits for Offset representation
+ * LA_SIZE = m  =>  ceil(log(m)/log(2)) bits for Length representation
+ * Alway 8 bits for Next char representation
+ *
+ * DEFAULT (LA_SIZE = 15, SB_SIZE = 4095):
  * Offset : 12 bits representation => [0, 4095]
  * Length : 4 bits representation => [0, 15]
  * Next char requires 8 bits
  * Total token's size: 12 + 4 + 8 = 24 bits = 3 bytes
- * 
+ *
  *     0 1 2 3 4 5 6 7 0 1 2 3 4 5 6 7 0 1 2 3 4 5 6 7
  *    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
  *    |         offset        |lenght |   next char   |

@@ -62,12 +62,9 @@ int main(int argc, char *argv[])
     int opt;
     FILE *file = NULL;
     struct bitFILE *bitF = NULL;
-    MODES mode;
+    MODES mode = -1;
     char *filenameIn = NULL, *filenameOut = NULL;
     int la_size = -1, sb_size = -1; /* default size */
-    
-    /* default mode */
-    mode = -1;
     
     while ((opt = getopt(argc, argv, "cdi:o:l:s:h")) != -1)
     {
