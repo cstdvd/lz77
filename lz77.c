@@ -162,10 +162,13 @@ void decode(struct bitFILE *file, FILE *out)
     
     buffer = (unsigned char*)calloc(WINDOW_SIZE, sizeof(unsigned char));
     
-    while(bitIO_feof(file) == 0)
+    while(1)
     {
         /* read the code from the input file */
         t = readcode(file, LA_SIZE, SB_SIZE);
+
+			if(t.off == -1)
+				break;
         
         if(back + t.len > WINDOW_SIZE - 1){
             memcpy(buffer, &(buffer[back - SB_SIZE]), SB_SIZE);
@@ -238,7 +241,7 @@ struct token match(struct node *tree, int root, unsigned char *window, int la, i
  ***************************************************************************/
 void writecode(struct token t, struct bitFILE *out, int la_size, int sb_size)
 {
-    printf("la %d, sb %d, bitof la %d, bitof sb %d\n", la_size, sb_size, bitof(la_size), bitof(sb_size));
+
     bitIO_write(out, &t.off, bitof(sb_size));
     bitIO_write(out, &t.len, bitof(la_size));
     bitIO_write(out, &t.next, 8);
@@ -252,12 +255,25 @@ void writecode(struct token t, struct bitFILE *out, int la_size, int sb_size)
  ***************************************************************************/
 struct token readcode(struct bitFILE *file, int la_size, int sb_size)
 {
-    /* variables */
-    struct token t;
-    printf("la %d, sb %d, bitof la %d, bitof sb %d\n", la_size, sb_size, bitof(la_size), bitof(sb_size));
-    bitIO_read(file, &t.off, sizeof(t.off), bitof(sb_size));
-    bitIO_read(file, &t.len, sizeof(t.len), bitof(la_size));
-    bitIO_read(file, &t.next, sizeof(t.next), 8);
-    
-    return t;
+	/* variables */
+	struct token t;
+	int ret = 0;
+
+	ret += bitIO_read(file, &t.off, sizeof(t.off), bitof(sb_size));
+	ret += bitIO_read(file, &t.len, sizeof(t.len), bitof(la_size));
+	ret += bitIO_read(file, &t.next, sizeof(t.next), 8);
+		
+	/* check for EOF or ERR */	
+	if(ret < (bitof(sb_size) + bitof(la_size) + 8)){
+		/* ERR */		
+		if(bitIO_ferror(file) != 0)
+		{
+			perror("Error reading bits.\n");
+			exit(EXIT_FAILURE);
+		}
+		/* EOF */
+		t.off = -1;
+	}
+
+	return t;
 }

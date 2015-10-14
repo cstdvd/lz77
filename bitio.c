@@ -57,6 +57,18 @@ int bitIO_feof(struct bitFILE *bitF)
 }
 
 /***************************************************************************
+ *						  BIT I/O FERR FUNCTION
+ * 	Name        : bitIO_ferror - allows to check if a read mode opened bitFILE
+ *                has the error indicator set.
+ * 	Parameters  : bitF - bitFILE opened in read mode
+ * 	Returned    : 0 if the flag is not set, non-zero value if it is set
+ ***************************************************************************/
+int bitIO_ferror(struct bitFILE *bitF)
+{
+    return (ferror(bitF->file));
+}
+
+/***************************************************************************
  *						 WRITE BUFFER FUNCTION
  * 	Name        : write_buffer - writes the used bytes of the buffer in the
  *                file opened in write mode. It is used either by the 
@@ -73,10 +85,7 @@ void write_buffer(struct bitFILE *bitF){
 	ret = fwrite(bitF->buffer, 1, bitF->bytepos, bitF->file);
 	/* check for errors on writing */
 	if(ret != bitF->bytepos)
-	{
-		perror("Error on write_buffer.\n");
-		exit(EXIT_FAILURE);
-	}
+		return;
 	/* clear the buffer */
 	bitF->bytepos = 0;
 	bitF->bitpos = 0;
@@ -97,10 +106,7 @@ void read_buffer(struct bitFILE *bitF){
 	bitF->read = fread(bitF->buffer, 1, BIT_IO_BUFFER, bitF->file);
 	/* check for errors */
 	if(bitF->read < BIT_IO_BUFFER && ferror(bitF->file))
-	{
-		 perror("Error reading file.\n");
-		 exit(EXIT_FAILURE);
-	}
+		return;
 	/* clear variables */
 	bitF->bytepos = 0;
 	bitF->bitpos = 0;
@@ -192,7 +198,7 @@ int bitIO_close(struct bitFILE *bitF){
  * 				  info - buffer containing information to be written
  * 				  nbytes - number of bytes to be written from the buffer
  * 				  nbit - number of bits required to represent the information
- * 	Returned    : 0 if write successfully, -1 if error on inputs
+ * 	Returned    : # bits written successfully, -1 if error on inputs
  ***************************************************************************/
 int bitIO_write(struct bitFILE *bitF, void *info, int nbit){
 
@@ -224,20 +230,28 @@ int bitIO_write(struct bitFILE *bitF, void *info, int nbit){
 		/* check if a write_buffer must be done */
 		if(bitF->bytepos == BIT_IO_BUFFER)
 			write_buffer(bitF);
+		/* check for writing errors */		
+		if(bitIO_ferror(bitF) != 0)
+			break;
 	}
 
-	return 0;
+	return i;
 }
 
 /***************************************************************************
  *								BIT I/O READ FUNCTION
- * 	Name        : bitIO_read - reads the first 'nbit' from the bitFILE and 
- *                puts them in the buffer
+ * 	Name        :	bitIO_read - reads the first 'nbit' from the bitFILE and 
+ *                	puts them in the buffer.
+ *							If an error occurs, or the end of the file is
+ *      					reached, the return value is a short item count (or zero).
+ *							bitIO_read() does not distinguish between end-of-file and 
+ *							error, and callers must use 'bitIO_feof' and 'bitIO_ferror'
+ *							to determine which occurred.
  * 	Parameters  : bitF - bitFILE opened in read mode
  * 				  info - buffer where read bits are put
  * 				  info_s - size of the 'info' buffer in bytes
  * 				  nbit - number of bits to read
- * 	Returned    : 0 if read successfully, -1 if error on inputs
+ * 	Returned    :	# bits read successfully, -1 if error on inputs
  ***************************************************************************/
 int bitIO_read(struct bitFILE *bitF, void *info, int info_s, int nbit){
 
@@ -253,7 +267,7 @@ int bitIO_read(struct bitFILE *bitF, void *info, int info_s, int nbit){
 	memset(info, 0, info_s);
     
 	/* begin the reading */
-	for(i=0; i<nbit; i++)
+	for(i=0; i<nbit && (bitIO_feof(bitF) != 1); i++)
 	{
 		/* get bit to read */
 		mask = 1 << bitF->bitpos;
@@ -270,12 +284,15 @@ int bitIO_read(struct bitFILE *bitF, void *info, int info_s, int nbit){
         /* update bitF structure */
 		bitF->bytepos = (bitF->bitpos < 7)? bitF->bytepos : (bitF->bytepos + 1);
 		bitF->bitpos = (bitF->bitpos <7)? (bitF->bitpos + 1) : 0;
-        
+
 		/* check if it read all bits from the file and, if it is the case, 
            it reads new bytes from the file */
 		if(bitF->bytepos == BIT_IO_BUFFER)
 			read_buffer(bitF);
+		/* check for reading errors */
+		if(bitIO_ferror(bitF) != 0)
+			break;
 	}
 
-	return 0;
+	return i;
 }
