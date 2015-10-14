@@ -20,6 +20,8 @@ The window is contained in a fixed size buffer.
 
 The match between SB and LA is made by a binary tree, implemented in an array.
 
+Reading and writing on the encoded file it is made via the bitIO library, implemented in the project. It allows to read and to write on the file bit-per-bit instead byte-per-byte as usual.
+
 ## Usage
 Syntax:
 ```
@@ -31,5 +33,8 @@ Options:
 -d: decompression mode
 -i <filename>: input file
 -o <filename>: output file
+-l <value>: lookahead size (default 15)
+-s <value>: searchbuffer size (default 4095)
 -h: help
 ```
+The *lookahead* and *searchbuffer* sizes are optional. If the two options are not set, default values are used.
