@@ -33,7 +33,6 @@ struct bitFILE{
 
 /***************************************************************************
  *					          BIT OF FUNCTION
- *
  * 	Name        : bitof - computes the minimum # of bits needed to represent
  *                an integer
  * 	Parameters  : n	- integer number to represent
@@ -45,7 +44,6 @@ int bitof(int n){
 
 /***************************************************************************
  *						  BIT I/O FEOF FUNCTION
- *
  * 	Name        : bitIO_feof - allows to check if a read mode opened bitFILE
  *                has the end-of-file indicator set.
  * 	Parameters  : bitF - bitFILE opened in read mode
@@ -60,8 +58,7 @@ int bitIO_feof(struct bitFILE *bitF)
 
 /***************************************************************************
  *						 WRITE BUFFER FUNCTION
- *
- * 	Name        : write_buffer - writes the used bytes of the buffer in the 
+ * 	Name        : write_buffer - writes the used bytes of the buffer in the
  *                file opened in write mode. It is used either by the 
  *                'bitIO_write' function to flush the whole buffer, either 
  *                by the 'bitIO_close' one to write the remained bytes in 
@@ -88,8 +85,7 @@ void write_buffer(struct bitFILE *bitF){
 
 /***************************************************************************
  *                      READ BUFFER FUNCTION
- *
- * 	Name        : read_buffer - reads at most BIT_IO_BUFFER bytes from the 
+ * 	Name        : read_buffer - reads at most BIT_IO_BUFFER bytes from the
  *                bitFILE and copy them into the buffer. It is used only by
  *                the 'bitIO_read' function, once the last bit in the buffer
  *                has been read.
@@ -113,7 +109,6 @@ void read_buffer(struct bitFILE *bitF){
 
 /***************************************************************************
  *						BIT I/O OPEN FUNCTION
- *
  * 	Name        : bitIO_open - open the file specified by 'path' in write or
  *                read mode, depending on the value of 'mode' parameter.
  * 	Parameters  : path - path to the file to open
@@ -160,7 +155,6 @@ struct bitFILE* bitIO_open(const char *path, int mode){
 
 /***************************************************************************
  *						  BIT I/O CLOSE FUNCTION
- *
  * 	Name        : bitIO_close - closes the bitFILE given as input and frees
  *                memory portions occupied by the structures. If the file is
  *                opened in write modecand there are pending bits, these are
@@ -192,7 +186,6 @@ int bitIO_close(struct bitFILE *bitF){
 
 /***************************************************************************
  *							BIT I/O WRITE FUNCTION
- *
  * 	Name        : bitIO_write - writes the first 'nbit' pointed by 'info' in
  *                the bitFILE pointed by 'bitF'.
  * 	Parameters  : bitF - bitFILE opened in write mode
@@ -238,7 +231,6 @@ int bitIO_write(struct bitFILE *bitF, void *info, int nbit){
 
 /***************************************************************************
  *								BIT I/O READ FUNCTION
- *
  * 	Name        : bitIO_read - reads the first 'nbit' from the bitFILE and 
  *                puts them in the buffer
  * 	Parameters  : bitF - bitFILE opened in read mode

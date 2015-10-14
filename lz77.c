@@ -26,7 +26,6 @@
 
 /***************************************************************************
  *                            TYPE DEFINITIONS
- *
  * Each token is composed by a backward offset, the match's length and the
  * next character in the lookahead.
  * Offset : [0, SB_SIZE]            Length : [0, LA_SIZE]
