@@ -21,7 +21,6 @@
 #define DEFAULT_LA_SIZE 15      /* lookahead size */
 #define DEFAULT_SB_SIZE 4095    /* search buffer size */
 #define N 3
-#define DEFAULT_WINDOW_SIZE ((DEFAULT_SB_SIZE * N) + DEFAULT_LA_SIZE)
 #define MAX_BIT_BUFFER 16
 
 /***************************************************************************
